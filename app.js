@@ -211,7 +211,6 @@ document.getElementById('juez-select').addEventListener('change', (e) => {
 function renderizarPlatosParaCalificar(juezId) {
     const contenedor = document.getElementById('platos-a-calificar');
     
-    // Filtrar platos donde el juez NO es el cocinero
     const platosDisponibles = appData.platos.filter(p => p.cocinero_id !== juezId);
     
     if (platosDisponibles.length === 0) {
@@ -240,8 +239,8 @@ function renderizarPlatosParaCalificar(juezId) {
                     </div>` :
                     `<div class="calificacion-form" data-plato="${plato.id}" data-juez="${juezId}">
                         <div class="stars">
-                            ${[1,2,3,4,5,6,7,8,9,10].map(num => 
-                                `<span onclick="calificar('${plato.id}', '${juezId}', ${num})" title="${num}">⭐</span>`
+                            ${[1,2,3,4,5].map(num => 
+                                `<span onclick="calificar('${plato.id}', '${juezId}', ${num})" title="${num} estrella${num > 1 ? 's' : ''}">⭐</span>`
                             ).join('')}
                         </div>
                         <input type="text" placeholder="Comentario (opcional)" class="comentario-input" style="margin-top: 0.5rem;">
@@ -257,6 +256,12 @@ function calificar(platoId, juezId, puntuacion) {
     const plato = obtenerPlato(platoId);
     if (plato.cocinero_id === juezId) {
         alert('¡No puedes calificar tu propio plato!');
+        return;
+    }
+    
+    // Validar que la puntuación esté entre 1 y 5
+    if (puntuacion < 1 || puntuacion > 5) {
+        alert('La puntuación debe ser entre 1 y 5 estrellas');
         return;
     }
     
@@ -285,6 +290,17 @@ function calificar(platoId, juezId, puntuacion) {
     
     guardarDatos();
     renderizarPlatosParaCalificar(juezId);
+    
+    // Pequeña animación de confirmación
+    const estrellas = document.querySelectorAll(`[data-plato="${platoId}"] .stars span`);
+    estrellas.forEach((estrella, index) => {
+        if (index < puntuacion) {
+            estrella.style.transform = 'scale(1.3)';
+            setTimeout(() => {
+                estrella.style.transform = 'scale(1)';
+            }, 200);
+        }
+    });
 }
 
 function eliminarCalificacion(calificacionId, juezId) {
