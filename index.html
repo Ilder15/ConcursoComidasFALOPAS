@@ -3,57 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Concurso de Comida Familiar 🍳</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Concurso De Comidas FALOPAS</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🍽️ Concurso de Comida Familiar</h1>
-            
-            <!-- Toggle Modo Oscuro -->
-            <div class="theme-toggle">
-                <button id="btn-theme" onclick="toggleTheme()" title="Cambiar modo oscuro/claro">
+            <div class="header-top">
+                <h1>Concurso De Comidas FALOPAS</h1>
+                <button id="btn-theme" class="theme-btn" onclick="toggleTheme()">
                     <span class="theme-icon">🌙</span>
-                    <span class="theme-text">Modo Oscuro</span>
                 </button>
             </div>
             
             <nav id="nav">
-                <button class="tab active" data-tab="login">🔐 Iniciar Sesión</button>
-                <button class="tab" data-tab="registro">Registro</button>
-                <button class="tab" data-tab="platos">Platos</button>
-                <button class="tab" data-tab="calificar">Calificar</button>
-                <button class="tab" data-tab="resultados">Resultados</button>
+                <button class="nav-btn active" data-tab="login">Iniciar Sesión</button>
+                <button class="nav-btn" data-tab="registro">Registro</button>
+                <button class="nav-btn" data-tab="platos">Platos</button>
+                <button class="nav-btn" data-tab="calificar">Calificar</button>
+                <button class="nav-btn" data-tab="resultados">Resultados</button>
             </nav>
         </header>
 
         <main>
-            <!-- Panel de Login con Código -->
+            <!-- Panel de Login -->
             <section id="panel-login" class="panel active">
-                <h2>🔐 Ingresa tu Código de Participante</h2>
+                <h2>Autenticación de Participante</h2>
                 
                 <div id="login-form">
                     <form id="form-login">
-                        <label for="codigo-input">Código de acceso:</label>
-                        <input type="text" id="codigo-input" placeholder="Ingresa tu código de 6 dígitos" 
-                               maxlength="6" pattern="[0-9]{6}" required autocomplete="off">
-                        <button type="submit">Entrar 🚀</button>
+                        <div class="form-group">
+                            <label for="codigo-input">Código de Acceso</label>
+                            <input type="text" id="codigo-input" placeholder="••••••" 
+                                   maxlength="6" pattern="[0-9]{6}" required autocomplete="off">
+                            <small>Ingrese el código de 6 dígitos asignado</small>
+                        </div>
+                        <button type="submit" class="btn-primary">Acceder al Sistema</button>
                     </form>
-                    <p style="text-align: center; margin-top: 1rem;">
-                        ¿No tienes código? <a href="#" onclick="mostrarPanel('registro')" class="link">Regístrate aquí</a>
-                    </p>
-                    <div id="login-error" style="color: #ff4757; text-align: center; display: none; margin-top: 0.5rem;"></div>
+                    <div class="login-footer">
+                        <p>¿No posee un código? <a href="#" onclick="mostrarPanel('registro')">Solicitar registro</a></p>
+                    </div>
+                    <div id="login-error" class="error-message"></div>
                 </div>
                 
-                <!-- Info de sesión activa -->
+                <!-- Sesión activa -->
                 <div id="sesion-activa" style="display: none;">
-                    <div class="sesion-card">
-                        <h3>✅ Sesión Activa</h3>
-                        <p><strong>Nombre:</strong> <span id="sesion-nombre"></span></p>
-                        <p><strong>Tipo:</strong> <span id="sesion-tipo"></span></p>
-                        <p><strong>Código:</strong> <span id="sesion-codigo"></span></p>
-                        <button onclick="cerrarSesion()" class="cerrar-sesion-btn">Cerrar Sesión 🔒</button>
+                    <div class="session-card">
+                        <h3>Sesión Activa</h3>
+                        <div class="session-info">
+                            <p><strong>Participante:</strong> <span id="sesion-nombre"></span></p>
+                            <p><strong>Rol:</strong> <span id="sesion-tipo"></span></p>
+                            <p><strong>Código:</strong> <span id="sesion-codigo"></span></p>
+                        </div>
+                        <button onclick="cerrarSesion()" class="btn-danger">Cerrar Sesión</button>
                     </div>
                 </div>
             </section>
@@ -62,54 +64,64 @@
             <section id="panel-registro" class="panel">
                 <h2>Registro de Participantes</h2>
                 <form id="form-registro">
-                    <label for="nombre-participante">Nombre:</label>
-                    <input type="text" id="nombre-participante" placeholder="Nombre del participante" required>
-                    <label for="tipo-participante">Tipo:</label>
-                    <select id="tipo-participante">
-                        <option value="cocinero">Cocinero/a 👨‍🍳</option>
-                        <option value="invitado">Invitado/a (solo califica) 🍴</option>
-                    </select>
-                    <button type="submit">Agregar Participante</button>
+                    <div class="form-group">
+                        <label for="nombre-participante">Nombre Completo</label>
+                        <input type="text" id="nombre-participante" placeholder="Ej: María García" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tipo-participante">Tipo de Participante</label>
+                        <select id="tipo-participante">
+                            <option value="cocinero">Cocinero/a (presenta platos)</option>
+                            <option value="invitado">Invitado/a (solo degusta)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-primary">Registrar Participante</button>
                 </form>
                 <div id="lista-participantes"></div>
             </section>
 
             <!-- Panel de Platos -->
             <section id="panel-platos" class="panel">
-                <h2>Agregar Plato</h2>
+                <h2>Gestión de Platos</h2>
                 <form id="form-plato">
-                    <label for="cocinero-select">Cocinero:</label>
-                    <select id="cocinero-select" required>
-                        <option value="">Selecciona al cocinero...</option>
-                    </select>
-                    <label for="nombre-plato">Nombre del plato:</label>
-                    <input type="text" id="nombre-plato" placeholder="Nombre del plato" required>
-                    <label for="descripcion-plato">Descripción:</label>
-                    <textarea id="descripcion-plato" placeholder="Descripción (opcional)" rows="2"></textarea>
-                    <button type="submit">Agregar Plato 🍲</button>
+                    <div class="form-group">
+                        <label for="cocinero-select">Cocinero Responsable</label>
+                        <select id="cocinero-select" required>
+                            <option value="">Seleccione un cocinero...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="nombre-plato">Nombre del Plato</label>
+                        <input type="text" id="nombre-plato" placeholder="Ej: Paella Valenciana" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="descripcion-plato">Descripción (opcional)</label>
+                        <textarea id="descripcion-plato" placeholder="Breve descripción del plato..." rows="2"></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary">Registrar Plato</button>
                 </form>
                 <div id="lista-platos"></div>
             </section>
 
             <!-- Panel de Calificación -->
             <section id="panel-calificar" class="panel">
-                <h2>Calificar Platos</h2>
+                <h2>Evaluación de Platos</h2>
                 <div id="info-juez" class="info-bar"></div>
                 <div id="platos-a-calificar">
-                    <p class="mensaje-vacio">Inicia sesión con tu código para calificar platos.</p>
+                    <p class="empty-message">Debe iniciar sesión para acceder al sistema de calificación.</p>
                 </div>
             </section>
 
             <!-- Panel de Resultados -->
             <section id="panel-resultados" class="panel">
-                <h2>🏆 Ranking de Platos</h2>
-                <button id="btn-actualizar-resultados" class="refresh-btn">Actualizar Resultados 🔄</button>
+                <h2>Resultados del Concurso</h2>
+                <button id="btn-actualizar-resultados" class="btn-secondary">Actualizar Resultados</button>
                 <div id="tabla-resultados"></div>
             </section>
         </main>
         
         <footer>
-            <p>🍳 Concurso de Comida Familiar - ¡Qué gane el mejor plato!</p>
+            <p>© 2025 Concurso Gastronómico FALOPAS</p>
         </footer>
     </div>
 
