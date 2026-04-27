@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concurso de Comida Familiar 🍳</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🍽️ Concurso de Comida Familiar</h1>
+            <nav id="nav">
+                <button class="tab active" data-tab="registro">Registro</button>
+                <button class="tab" data-tab="platos">Platos</button>
+                <button class="tab" data-tab="calificar">Calificar</button>
+                <button class="tab" data-tab="resultados">Resultados</button>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Panel de Registro -->
+            <section id="panel-registro" class="panel active">
+                <h2>Registro de Participantes</h2>
+                <form id="form-registro">
+                    <input type="text" id="nombre-participante" placeholder="Nombre" required>
+                    <select id="tipo-participante">
+                        <option value="cocinero">Cocinero/a 👨‍🍳</option>
+                        <option value="invitado">Invitado/a (solo califica) 🍴</option>
+                    </select>
+                    <button type="submit">Agregar Participante</button>
+                </form>
+                <div id="lista-participantes"></div>
+            </section>
+
+            <!-- Panel de Platos -->
+            <section id="panel-platos" class="panel">
+                <h2>Agregar Plato</h2>
+                <form id="form-plato">
+                    <select id="cocinero-select" required>
+                        <option value="">Selecciona al cocinero...</option>
+                    </select>
+                    <input type="text" id="nombre-plato" placeholder="Nombre del plato" required>
+                    <textarea id="descripcion-plato" placeholder="Descripción (opcional)" rows="2"></textarea>
+                    <button type="submit">Agregar Plato 🍲</button>
+                </form>
+                <div id="lista-platos"></div>
+            </section>
+
+            <!-- Panel de Calificación -->
+            <section id="panel-calificar" class="panel">
+                <h2>Calificar Platos</h2>
+                <form id="form-calificar">
+                    <select id="juez-select" required>
+                        <option value="">¿Quién eres?</option>
+                    </select>
+                    <div id="platos-a-calificar">
+                        <p>Selecciona un juez para ver los platos disponibles</p>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Panel de Resultados -->
+            <section id="panel-resultados" class="panel">
+                <h2>🏆 Ranking de Platos</h2>
+                <button id="btn-actualizar-resultados">Actualizar Resultados 🔄</button>
+                <div id="tabla-resultados"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
