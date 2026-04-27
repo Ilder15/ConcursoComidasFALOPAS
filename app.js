@@ -442,5 +442,33 @@ function renderizarResultados() {
 
 document.getElementById('btn-actualizar-resultados').addEventListener('click', renderizarResultados);
 
+// ============ TEMA ============
+function cargarTema() {
+    const tema = localStorage.getItem(THEME_KEY) || 'light';
+    document.documentElement.setAttribute('data-theme', tema);
+    actualizarIconoTema(tema);
+}
+
+function toggleTheme() {
+    const actual = document.documentElement.getAttribute('data-theme');
+    const nuevo = actual === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', nuevo);
+    localStorage.setItem(THEME_KEY, nuevo);
+    actualizarIconoTema(nuevo);
+}
+
+function actualizarIconoTema(tema) {
+    const icon = document.querySelector('.theme-icon');
+    if (icon) icon.textContent = tema === 'dark' ? '☀️' : '🌙';
+}
+
+// Asignar el evento al botón
+document.addEventListener('DOMContentLoaded', function() {
+    const btnTheme = document.getElementById('btn-theme');
+    if (btnTheme) {
+        btnTheme.addEventListener('click', toggleTheme);
+    }
+});
+
 // ============ INICIAR ============
 document.addEventListener('DOMContentLoaded', init);
