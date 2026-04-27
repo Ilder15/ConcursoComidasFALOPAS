@@ -77,12 +77,29 @@
                 <div id="lista-participantes"></div>
             </section>
 
-            <!-- Panel de Platos (SOLO ADMIN) -->
-            <section id="panel-platos" class="panel">
+            <!-- Panel de Categorías (SOLO ADMIN) -->
+            <section id="panel-categorias" class="panel">
                 <div class="admin-banner">🔒 Panel de Administración</div>
+                <h2>Gestión de Categorías de Evaluación</h2>
+                <p style="margin-bottom:1rem; color: var(--text-light);">Configure las categorías que se evaluarán en esta edición del concurso.</p>
+                <form id="form-categoria">
+                    <div class="form-group">
+                        <label for="nombre-categoria">Nueva Categoría</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="nombre-categoria" placeholder="Ej: Textura, Aroma, Creatividad..." required>
+                            <button type="submit" class="btn-primary" style="width: auto; margin-top: 0;">Agregar</button>
+                        </div>
+                    </div>
+                </form>
+                <div id="lista-categorias"></div>
+            </section>
+
+            <!-- Panel de Platos (ADMIN O COCINERO) -->
+            <section id="panel-platos" class="panel">
+                <div id="platos-admin-banner" class="admin-banner" style="display:none;">🔒 Panel de Administración</div>
                 <h2>Gestión de Platos</h2>
                 <form id="form-plato">
-                    <div class="form-group">
+                    <div class="form-group" id="cocinero-group">
                         <label for="cocinero-select">Cocinero Responsable</label>
                         <select id="cocinero-select" required>
                             <option value="">Seleccione un cocinero...</option>
@@ -105,6 +122,9 @@
             <section id="panel-calificar" class="panel">
                 <h2>Evaluación de Platos</h2>
                 <div id="info-juez" class="info-bar"></div>
+                <div id="categorias-activas-info" style="margin-bottom:1rem; padding:0.8rem; background:var(--bg); border-radius:8px; font-size:0.85rem; color:var(--text-light);">
+                    <strong>Categorías a evaluar:</strong> <span id="lista-categorias-activas"></span>
+                </div>
                 <div id="platos-a-calificar">
                     <p class="empty-message">Debe iniciar sesión para acceder al sistema de calificación.</p>
                 </div>
