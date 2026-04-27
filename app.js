@@ -215,17 +215,19 @@ function actualizarPanel(panel) {
         case 'login': actualizarUISesion(); break;
         case 'registro': renderizarParticipantes(); break;
         case 'categorias': renderizarCategorias(); break;
-        case 'platos': 
-            if (sesionActual && sesionActual.esAdmin) {
-                document.getElementById('platos-admin-banner').style.display = 'block';
-                document.getElementById('cocinero-group').style.display = 'block';
-                renderizarCocineros();
-            } else if (sesionActual && sesionActual.tipo === 'cocinero') {
-                document.getElementById('platos-admin-banner').style.display = 'none';
-                document.getElementById('cocinero-group').style.display = 'none';
-            }
-            renderizarPlatos(); 
-            break;
+       case 'platos': 
+    if (sesionActual && sesionActual.esAdmin) {
+        document.getElementById('platos-admin-banner').style.display = 'block';
+        document.getElementById('cocinero-group').style.display = 'block';
+        document.getElementById('cocinero-select').setAttribute('required', 'required');
+        renderizarCocineros();
+    } else if (sesionActual && sesionActual.tipo === 'cocinero') {
+        document.getElementById('platos-admin-banner').style.display = 'none';
+        document.getElementById('cocinero-group').style.display = 'none';
+        document.getElementById('cocinero-select').removeAttribute('required');
+    }
+    renderizarPlatos(); 
+    break;
         case 'calificar':
             if (sesionActual) {
                 document.getElementById('info-juez').innerHTML = 'Evaluando como: <strong>' + sesionActual.nombre + '</strong>';
