@@ -44,29 +44,26 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 // ============ API GOOGLE SHEETS ============
-// ============ API GOOGLE SHEETS ============
-async function apiCall(action, data = {}) {
-    try {
-        const url = API_URL + '?action=' + action + '&data=' + encodeURIComponent(JSON.stringify(data));
-        const response = await fetch(url, {
-            method: 'GET',
-            mode: 'no-cors'
-        });
+function apiCall(action, data = {}) {
+    return new Promise((resolve, reject) => {
+        const callbackName = 'callback_' + Date.now();
+        const url = API_URL + '?action=' + action + '&data=' + encodeURIComponent(JSON.stringify(data)) + '&callback=' + callbackName;
         
-        // Con no-cors no podemos leer la respuesta directamente
-        // Usamos un iframe o redirect como workaround
-        const text = await response.text();
-        if (!text) return { error: 'Respuesta vacía (CORS bloqueado)' };
+        window[callbackName] = function(result) {
+            delete window[callbackName];
+            document.body.removeChild(script);
+            resolve(result);
+        };
         
-        try {
-            return JSON.parse(text);
-        } catch(e) {
-            return { error: 'Error parseando respuesta' };
-        }
-    } catch(e) {
-        console.error('Error API:', e);
-        return { error: 'Error de conexión' };
-    }
+        const script = document.createElement('script');
+        script.src = url;
+        script.onerror = function() {
+            delete window[callbackName];
+            document.body.removeChild(script);
+            reject(new Error('Error de conexión'));
+        };
+        document.body.appendChild(script);
+    });
 }
 
 async function cargarDatosAPI() {
