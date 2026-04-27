@@ -1,13 +1,19 @@
 // ============ CONFIGURACIÓN ============
 const CODIGO_ADMIN = '123456';
 const API_URL = 'https://script.google.com/macros/s/AKfcybXQp1L9y5cDEdtgkpH3ArshvD_pxsOUfw2KDu5GF2d6bJkkKGIsRlU8uA81dlwFm8w/exec';
+const USAR_API = false; // CAMBIÁ A true CUANDO GOOGLE SHEETS FUNCIONE
 
 let concursoFinalizado = false;
+
+const STORAGE_KEY = 'concurso_falopas_data';
+const SESSION_KEY = 'concurso_falopas_session';
+
+const CATEGORIAS_DEFAULT = ['Presentación', 'Sabor', 'Originalidad', 'Bebida'];
 
 let appData = {
     participantes: [],
     platos: [],
-    categorias: [],
+    categorias: [...CATEGORIAS_DEFAULT],
     calificaciones: []
 };
 
@@ -15,7 +21,12 @@ let sesionActual = null;
 
 // ============ INICIALIZACIÓN ============
 document.addEventListener('DOMContentLoaded', async function() {
-    await cargarDatos();
+    if (USAR_API) {
+        await cargarDatosAPI();
+    } else {
+        cargarDatosLocal();
+    }
+    
     cargarTema();
     configurarEventos();
     construirMenu();
@@ -33,7 +44,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 });
 
-// ============ API GOOGLE SHEETS ============
+// ============ API (GOOGLE SHEETS) ============
 async function apiCall(action, data = {}) {
     try {
         const params = new URLSearchParams({ action, data: JSON.stringify(data) });
@@ -45,44 +56,59 @@ async function apiCall(action, data = {}) {
     }
 }
 
-// ============ DATOS ============
-async function cargarDatos() {
+async function cargarDatosAPI() {
     const result = await apiCall('getAll');
-    
-    if (result.error) {
-        console.error('Error cargando datos:', result.error);
-        return;
+    if (!result.error) {
+        if (result.participantes) appData.participantes = result.participantes;
+        if (result.platos) appData.platos = result.platos;
+        if (result.categorias && Array.isArray(result.categorias)) appData.categorias = result.categorias;
+        if (result.calificaciones) {
+            appData.calificaciones = result.calificaciones;
+            appData.calificaciones.forEach(c => {
+                if (typeof c.puntuaciones === 'string') {
+                    try { c.puntuaciones = JSON.parse(c.puntuaciones); } catch(e) { c.puntuaciones = {}; }
+                }
+            });
+        }
+        if (result.config) {
+            concursoFinalizado = result.config.finalizado === true || result.config.finalizado === 'true';
+        }
     }
-    
-    if (result.participantes) appData.participantes = result.participantes;
-    if (result.platos) appData.platos = result.platos;
-    if (result.categorias && Array.isArray(result.categorias)) appData.categorias = result.categorias;
-    
-    if (result.calificaciones) {
-        appData.calificaciones = result.calificaciones;
-        appData.calificaciones.forEach(c => {
-            if (typeof c.puntuaciones === 'string') {
-                try { c.puntuaciones = JSON.parse(c.puntuaciones); } catch(e) { c.puntuaciones = {}; }
-            }
-        });
+    // Cargar sesión
+    cargarSesion();
+}
+
+// ============ DATOS LOCALES ============
+function cargarDatosLocal() {
+    const datos = localStorage.getItem(STORAGE_KEY);
+    if (datos) {
+        try {
+            const parsed = JSON.parse(datos);
+            appData.participantes = parsed.participantes || [];
+            appData.platos = parsed.platos || [];
+            appData.categorias = parsed.categorias || [...CATEGORIAS_DEFAULT];
+            appData.calificaciones = parsed.calificaciones || [];
+            concursoFinalizado = parsed.finalizado || false;
+        } catch(e) {}
     }
-    
-    if (result.config) {
-        concursoFinalizado = result.config.finalizado === true || result.config.finalizado === 'true';
-    }
-    
-    // Cargar sesión guardada
-    const sesion = localStorage.getItem('concurso_session');
+    cargarSesion();
+}
+
+function guardarDatosLocal() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        ...appData,
+        finalizado: concursoFinalizado
+    }));
+}
+
+function cargarSesion() {
+    const sesion = localStorage.getItem(SESSION_KEY);
     if (sesion) {
         try { sesionActual = JSON.parse(sesion); } catch(e) { sesionActual = null; }
     }
 }
 
-async function refrescarDatos() {
-    await cargarDatos();
-}
-
-// ============ TEMA OSCURO ============
+// ============ TEMA ============
 function cargarTema() {
     const tema = localStorage.getItem('concurso_theme') || 'light';
     document.documentElement.setAttribute('data-theme', tema);
@@ -102,7 +128,7 @@ function actualizarIconoTema(tema) {
     if (icon) icon.textContent = tema === 'dark' ? '☀️' : '🌙';
 }
 
-// ============ MENÚ DINÁMICO ============
+// ============ MENÚ ============
 function construirMenu() {
     const nav = document.getElementById('nav');
     if (!nav) return;
@@ -148,51 +174,43 @@ function construirMenu() {
     });
 }
 
-// ============ CONFIGURAR EVENTOS ============
+// ============ EVENTOS ============
 function configurarEventos() {
     document.getElementById('btn-theme').addEventListener('click', toggleTheme);
     
-    document.getElementById('form-login').addEventListener('submit', function(e) {
-        e.preventDefault();
-        hacerLogin();
+    document.getElementById('form-login').addEventListener('submit', e => {
+        e.preventDefault(); hacerLogin();
     });
     
-    document.getElementById('form-registro').addEventListener('submit', async function(e) {
+    document.getElementById('form-registro').addEventListener('submit', async e => {
         e.preventDefault();
-        if (!sesionActual || !sesionActual.esAdmin) return;
-        await registrarParticipante();
+        if (!sesionActual?.esAdmin) return;
+        if (USAR_API) await registrarParticipanteAPI();
+        else registrarParticipanteLocal();
     });
     
-    document.getElementById('form-categoria').addEventListener('submit', async function(e) {
+    document.getElementById('form-categoria').addEventListener('submit', async e => {
         e.preventDefault();
-        if (!sesionActual || !sesionActual.esAdmin) return;
-        await agregarCategoria();
+        if (!sesionActual?.esAdmin) return;
+        if (USAR_API) await agregarCategoriaAPI();
+        else agregarCategoriaLocal();
     });
     
-    document.getElementById('form-plato').addEventListener('submit', async function(e) {
+    document.getElementById('form-plato').addEventListener('submit', async e => {
         e.preventDefault();
-        await registrarPlato();
+        if (USAR_API) await registrarPlatoAPI();
+        else registrarPlatoLocal();
     });
     
-    const btnCerrar = document.getElementById('btn-cerrar-sesion');
-    if (btnCerrar) btnCerrar.addEventListener('click', cerrarSesion);
+    document.getElementById('btn-cerrar-sesion')?.addEventListener('click', cerrarSesion);
     
-    const btnActualizar = document.getElementById('btn-actualizar-resultados');
-    if (btnActualizar) {
-        btnActualizar.addEventListener('click', async function() {
-            await refrescarDatos();
-            renderizarResultados();
-        });
-    }
+    document.getElementById('btn-actualizar-resultados')?.addEventListener('click', renderizarResultados);
     
     const btnFinalizar = document.getElementById('btn-finalizar');
     if (btnFinalizar) {
-        btnFinalizar.addEventListener('click', async function() {
-            if (concursoFinalizado) {
-                await reabrirConcurso();
-            } else {
-                await finalizarConcurso();
-            }
+        btnFinalizar.addEventListener('click', () => {
+            if (concursoFinalizado) reabrirConcurso();
+            else finalizarConcurso();
         });
     }
 }
@@ -200,6 +218,14 @@ function configurarEventos() {
 // ============ UTILIDADES ============
 function generarId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
+}
+
+function generarCodigo() {
+    let codigo;
+    do {
+        codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    } while (appData.participantes.some(p => p.codigo === codigo));
+    return codigo;
 }
 
 function obtenerParticipante(id) {
@@ -243,13 +269,13 @@ function hacerLogin() {
     const errorDiv = document.getElementById('login-error');
     
     if (!codigo || codigo.length !== 6) {
-        if (errorDiv) { errorDiv.textContent = 'El código debe tener 6 dígitos.'; errorDiv.style.display = 'block'; }
+        if (errorDiv) { errorDiv.textContent = 'Código de 6 dígitos requerido.'; errorDiv.style.display = 'block'; }
         return;
     }
     
     if (codigo === CODIGO_ADMIN) {
         sesionActual = { id: 'admin', nombre: 'Administrador', tipo: 'admin', codigo: CODIGO_ADMIN, esAdmin: true };
-        localStorage.setItem('concurso_session', JSON.stringify(sesionActual));
+        localStorage.setItem(SESSION_KEY, JSON.stringify(sesionActual));
         actualizarUISesion();
         construirMenu();
         document.getElementById('codigo-input').value = '';
@@ -266,7 +292,7 @@ function hacerLogin() {
     }
     
     sesionActual = { id: participante.id, nombre: participante.nombre, tipo: participante.tipo, codigo: participante.codigo, esAdmin: false };
-    localStorage.setItem('concurso_session', JSON.stringify(sesionActual));
+    localStorage.setItem(SESSION_KEY, JSON.stringify(sesionActual));
     actualizarUISesion();
     construirMenu();
     document.getElementById('codigo-input').value = '';
@@ -276,7 +302,7 @@ function hacerLogin() {
 
 function cerrarSesion() {
     sesionActual = null;
-    localStorage.removeItem('concurso_session');
+    localStorage.removeItem(SESSION_KEY);
     actualizarUISesion();
     construirMenu();
     mostrarPanel('login');
@@ -300,71 +326,49 @@ function actualizarUISesion() {
     }
 }
 
-// ============ CATEGORÍAS (ADMIN) ============
-async function agregarCategoria() {
+// ============ CATEGORÍAS ============
+function agregarCategoriaLocal() {
     const input = document.getElementById('nombre-categoria');
     const nombre = input.value.trim();
     if (!nombre) return;
-    
-    const result = await apiCall('addCategoria', { nombre });
-    if (result.error) {
-        alert('Error: ' + result.error);
-        return;
-    }
-    
-    await refrescarDatos();
+    if (appData.categorias.includes(nombre)) { alert('Ya existe.'); return; }
+    appData.categorias.push(nombre);
+    guardarDatosLocal();
     input.value = '';
     renderizarCategorias();
 }
 
-async function eliminarCategoria(nombre) {
-    if (!confirm('¿Eliminar la categoría "' + nombre + '"?')) return;
-    await apiCall('deleteCategoria', { nombre });
-    await refrescarDatos();
+function eliminarCategoria(nombre) {
+    if (!confirm('¿Eliminar "' + nombre + '"?')) return;
+    appData.categorias = appData.categorias.filter(c => c !== nombre);
+    guardarDatosLocal();
     renderizarCategorias();
 }
 
 function renderizarCategorias() {
     const c = document.getElementById('lista-categorias');
     if (!c) return;
-    
     if (appData.categorias.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay categorías configuradas.</p>';
+        c.innerHTML = '<p class="empty-message">No hay categorías.</p>';
         return;
     }
-    
     c.innerHTML = '<h3>Categorías (' + appData.categorias.length + ')</h3>' +
         appData.categorias.map(cat => 
-            '<div class="categoria-card">' +
-                '<span class="categoria-nombre">📌 ' + cat + '</span>' +
-                '<button class="btn-delete btn-small" onclick="window.eliminarCategoria(\'' + cat + '\')">🗑️ Eliminar</button>' +
-            '</div>'
+            '<div class="categoria-card"><span class="categoria-nombre">📌 ' + cat + '</span><button class="btn-delete btn-small" onclick="window.eliminarCategoria(\'' + cat + '\')">🗑️ Eliminar</button></div>'
         ).join('');
 }
 
-// ============ REGISTRO DE PARTICIPANTES (ADMIN) ============
-async function registrarParticipante() {
+// ============ PARTICIPANTES ============
+function registrarParticipanteLocal() {
     const nombre = document.getElementById('nombre-participante').value.trim();
     const tipo = document.getElementById('tipo-participante').value;
     if (!nombre) return;
     
-    const id = generarId();
-    const result = await apiCall('addParticipante', { id, nombre, tipo });
+    const codigo = generarCodigo();
+    appData.participantes.push({ id: generarId(), nombre, tipo, codigo });
+    guardarDatosLocal();
     
-    if (result.error) {
-        alert('Error: ' + result.error);
-        return;
-    }
-    
-    await refrescarDatos();
-    
-    if (result.codigo) {
-        alert('✅ Participante registrado exitosamente.\n\n👤 Nombre: ' + nombre + 
-              '\n🔑 Código de acceso: ' + result.codigo + 
-              '\n📋 Tipo: ' + (tipo === 'cocinero' ? 'Cocinero/a' : 'Invitado/a') +
-              '\n\n⚠️ Entregue este código al participante.');
-    }
-    
+    alert('✅ Registrado\n\n👤 ' + nombre + '\n🔑 Código: ' + codigo + '\n📋 ' + tipo);
     document.getElementById('form-registro').reset();
     renderizarParticipantes();
 }
@@ -372,29 +376,22 @@ async function registrarParticipante() {
 function renderizarParticipantes() {
     const c = document.getElementById('lista-participantes');
     if (!c) return;
-    
     if (appData.participantes.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay participantes registrados.</p>';
+        c.innerHTML = '<p class="empty-message">No hay participantes.</p>';
         return;
     }
-    
     c.innerHTML = '<h3>Participantes (' + appData.participantes.length + ')</h3>' + 
         appData.participantes.map(p => 
-        '<div class="card">' +
-            '<div class="card-header">' +
-                '<strong>' + p.nombre + '</strong>' +
-                '<span class="badge badge-' + p.tipo + '">' + (p.tipo === 'cocinero' ? 'Cocinero' : 'Invitado') + '</span>' +
-            '</div>' +
-            '<p style="margin:0.5rem 0;">🔑 <strong>Código:</strong> <code style="font-size:1.1rem;background:var(--bg);padding:0.2rem 0.5rem;border-radius:4px;">' + p.codigo + '</code></p>' +
-            '<button class="btn-delete" onclick="window.eliminarParticipante(\'' + p.id + '\')">🗑️ Eliminar</button>' +
-        '</div>'
+        '<div class="card"><div class="card-header"><strong>' + p.nombre + '</strong><span class="badge badge-' + p.tipo + '">' + (p.tipo === 'cocinero' ? 'Cocinero' : 'Invitado') + '</span></div><p>🔑 <strong>Código:</strong> <code>' + p.codigo + '</code></p><button class="btn-delete" onclick="window.eliminarParticipante(\'' + p.id + '\')">🗑️ Eliminar</button></div>'
     ).join('');
 }
 
-async function eliminarParticipante(id) {
-    if (!confirm('¿Eliminar participante y todos sus datos?')) return;
-    await apiCall('deleteParticipante', { id });
-    await refrescarDatos();
+function eliminarParticipante(id) {
+    if (!confirm('¿Eliminar?')) return;
+    appData.participantes = appData.participantes.filter(p => p.id !== id);
+    appData.platos = appData.platos.filter(p => p.cocinero_id !== id);
+    appData.calificaciones = appData.calificaciones.filter(c => c.juez_id !== id);
+    guardarDatosLocal();
     renderizarParticipantes();
 }
 
@@ -404,153 +401,110 @@ function prepararPanelPlatos() {
     const cocineroGroup = document.getElementById('cocinero-group');
     const banner = document.getElementById('platos-admin-banner');
     
-    if (sesionActual && sesionActual.esAdmin) {
+    if (sesionActual?.esAdmin) {
         if (banner) banner.style.display = 'block';
         if (cocineroGroup) cocineroGroup.style.display = 'block';
         if (cocineroSelect) {
             cocineroSelect.setAttribute('required', '');
             cocineroSelect.style.display = '';
             const cocineros = appData.participantes.filter(p => p.tipo === 'cocinero');
-            cocineroSelect.innerHTML = '<option value="">Seleccione un cocinero...</option>' + 
+            cocineroSelect.innerHTML = '<option value="">Seleccione...</option>' + 
                 cocineros.map(c => '<option value="' + c.id + '">' + c.nombre + '</option>').join('');
         }
-    } else if (sesionActual && sesionActual.tipo === 'cocinero') {
+    } else {
         if (banner) banner.style.display = 'none';
         if (cocineroGroup) cocineroGroup.style.display = 'none';
-        if (cocineroSelect) {
-            cocineroSelect.removeAttribute('required');
-            cocineroSelect.style.display = 'none';
-        }
+        if (cocineroSelect) { cocineroSelect.removeAttribute('required'); cocineroSelect.style.display = 'none'; }
     }
-    
     renderizarPlatos();
 }
 
-async function registrarPlato() {
+function registrarPlatoLocal() {
     let cocinero_id;
-    
-    if (sesionActual && sesionActual.esAdmin) {
+    if (sesionActual?.esAdmin) {
         cocinero_id = document.getElementById('cocinero-select').value;
-    } else if (sesionActual && sesionActual.tipo === 'cocinero') {
+    } else if (sesionActual?.tipo === 'cocinero') {
         cocinero_id = sesionActual.id;
-    } else {
-        alert('No tiene permisos para registrar platos.');
-        return;
-    }
+    } else { alert('Sin permisos.'); return; }
     
     const nombre = document.getElementById('nombre-plato').value.trim();
     const descripcion = document.getElementById('descripcion-plato').value.trim();
+    if (!cocinero_id || !nombre) { alert('Complete los datos.'); return; }
     
-    if (!cocinero_id || !nombre) {
-        alert('Complete el nombre del plato.');
-        return;
-    }
-    
-    const id = generarId();
-    await apiCall('addPlato', { id, nombre, descripcion, cocinero_id });
-    await refrescarDatos();
+    appData.platos.push({ id: generarId(), nombre, descripcion, cocinero_id });
+    guardarDatosLocal();
     document.getElementById('form-plato').reset();
     prepararPanelPlatos();
-    alert('✅ Plato registrado correctamente.');
+    alert('✅ Plato registrado.');
 }
 
 function renderizarPlatos() {
     const c = document.getElementById('lista-platos');
     if (!c) return;
-    
-    let platosFiltrados = appData.platos;
-    if (sesionActual && sesionActual.tipo === 'cocinero' && !sesionActual.esAdmin) {
-        platosFiltrados = appData.platos.filter(p => p.cocinero_id === sesionActual.id);
+    let platos = appData.platos;
+    if (sesionActual?.tipo === 'cocinero' && !sesionActual?.esAdmin) {
+        platos = appData.platos.filter(p => p.cocinero_id === sesionActual.id);
     }
-    
-    if (platosFiltrados.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay platos registrados.</p>';
+    if (platos.length === 0) {
+        c.innerHTML = '<p class="empty-message">No hay platos.</p>';
         return;
     }
-    
-    c.innerHTML = '<h3>Platos (' + platosFiltrados.length + ')</h3>' + platosFiltrados.map(p => {
+    c.innerHTML = '<h3>Platos (' + platos.length + ')</h3>' + platos.map(p => {
         const co = obtenerParticipante(p.cocinero_id);
-        return '<div class="card">' +
-            '<div class="card-header">' +
-                '<strong>🍽️ ' + p.nombre + '</strong>' +
-                '<span style="font-size:0.85rem;color:var(--text-light);">' + (co ? co.nombre : '?') + '</span>' +
-            '</div>' +
-            (p.descripcion ? '<p style="font-size:0.9rem;color:var(--text-light);">' + p.descripcion + '</p>' : '') +
-            (sesionActual && (sesionActual.esAdmin || sesionActual.id === p.cocinero_id) ? 
-                '<button class="btn-delete" onclick="window.eliminarPlato(\'' + p.id + '\')">🗑️ Eliminar</button>' : '') +
-        '</div>';
+        return '<div class="card"><div class="card-header"><strong>🍽️ ' + p.nombre + '</strong><span>' + (co ? co.nombre : '?') + '</span></div>' +
+            (p.descripcion ? '<p>' + p.descripcion + '</p>' : '') +
+            '<button class="btn-delete" onclick="window.eliminarPlato(\'' + p.id + '\')">🗑️ Eliminar</button></div>';
     }).join('');
 }
 
-async function eliminarPlato(id) {
-    if (!confirm('¿Eliminar este plato?')) return;
-    await apiCall('deletePlato', { id });
-    await refrescarDatos();
+function eliminarPlato(id) {
+    if (!confirm('¿Eliminar?')) return;
+    appData.platos = appData.platos.filter(p => p.id !== id);
+    appData.calificaciones = appData.calificaciones.filter(c => c.plato_id !== id);
+    guardarDatosLocal();
     prepararPanelPlatos();
 }
 
-// ============ FINALIZAR / REABRIR CONCURSO ============
-async function finalizarConcurso() {
-    if (!sesionActual || !sesionActual.esAdmin) {
-        alert('Solo el administrador puede finalizar el concurso.');
-        return;
-    }
-    
-    if (!confirm('⚠️ ¿Está seguro de FINALIZAR el concurso?\n\nSe bloquearán las votaciones.\n\n¿Continuar?')) return;
-    
-    await apiCall('finalizarConcurso');
+// ============ FINALIZAR ============
+function finalizarConcurso() {
+    if (!sesionActual?.esAdmin) return;
+    if (!confirm('⚠️ ¿Finalizar concurso?')) return;
     concursoFinalizado = true;
+    guardarDatosLocal();
     actualizarBannerFinalizado();
     lanzarConfetti();
-    await refrescarDatos();
     renderizarResultados();
-    alert('🏆 ¡Concurso Finalizado! 🏆\n\nResultados oficiales publicados.');
+    alert('🏆 ¡Concurso Finalizado!');
 }
 
-async function reabrirConcurso() {
-    if (!sesionActual || !sesionActual.esAdmin) {
-        alert('Solo el administrador puede reabrir el concurso.');
-        return;
-    }
-    
-    if (!confirm('¿Reabrir el concurso?\nSe habilitarán las votaciones nuevamente.')) return;
-    
-    await apiCall('reabrirConcurso');
+function reabrirConcurso() {
+    if (!sesionActual?.esAdmin) return;
+    if (!confirm('¿Reabrir?')) return;
     concursoFinalizado = false;
+    guardarDatosLocal();
     actualizarBannerFinalizado();
-    await refrescarDatos();
     renderizarResultados();
-    alert('✅ Concurso reabierto. Los participantes pueden volver a votar.');
+    alert('✅ Concurso reabierto.');
 }
 
 function actualizarBannerFinalizado() {
     const banner = document.getElementById('banner-finalizado');
     const btnFinalizar = document.getElementById('btn-finalizar');
     const podio = document.getElementById('podio-final');
-    
     if (concursoFinalizado) {
         if (banner) banner.style.display = 'block';
-        if (btnFinalizar) {
-            btnFinalizar.textContent = '🔄 Reabrir Concurso';
-            btnFinalizar.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
-            btnFinalizar.style.color = '#fff';
-        }
+        if (btnFinalizar) { btnFinalizar.textContent = '🔄 Reabrir'; btnFinalizar.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)'; btnFinalizar.style.color = '#fff'; }
         if (podio) podio.style.display = 'block';
     } else {
         if (banner) banner.style.display = 'none';
-        if (btnFinalizar) {
-            btnFinalizar.textContent = '🏆 Finalizar Concurso';
-            btnFinalizar.style.background = 'linear-gradient(135deg, #FFD700, #FFA500)';
-            btnFinalizar.style.color = '#1a1a2e';
-        }
+        if (btnFinalizar) { btnFinalizar.textContent = '🏆 Finalizar'; btnFinalizar.style.background = 'linear-gradient(135deg, #FFD700, #FFA500)'; btnFinalizar.style.color = '#1a1a2e'; }
         if (podio) podio.style.display = 'none';
     }
 }
 
 function lanzarConfetti() {
-    const colores = ['#FFD700', '#FF6B6B', '#4ECDC4', '#FFA500', '#C9A96E', '#FF69B4', '#00D2FF'];
-    
-    for (let i = 0; i < 80; i++) {
+    const colores = ['#FFD700', '#FF6B6B', '#4ECDC4', '#FFA500', '#C9A96E'];
+    for (let i = 0; i < 60; i++) {
         setTimeout(() => {
             const confetti = document.createElement('div');
             confetti.className = 'confetti';
@@ -559,10 +513,9 @@ function lanzarConfetti() {
             confetti.style.height = (Math.random() * 10 + 5) + 'px';
             confetti.style.background = colores[Math.floor(Math.random() * colores.length)];
             confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
-            confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
             document.body.appendChild(confetti);
             setTimeout(() => confetti.remove(), 3000);
-        }, i * 30);
+        }, i * 20);
     }
 }
 
@@ -570,292 +523,109 @@ function lanzarConfetti() {
 function renderizarCalificacion(juezId) {
     const c = document.getElementById('platos-a-calificar');
     if (!c) return;
-    
-    if (concursoFinalizado) {
-        c.innerHTML = '<div style="padding:3rem;text-align:center;"><p class="empty-message">🔒 El concurso ha finalizado. Las votaciones están cerradas.</p></div>';
-        return;
-    }
-    
-    if (appData.categorias.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay categorías configuradas para evaluar.</p>';
-        return;
-    }
-    
-    if (sesionActual && sesionActual.esAdmin) {
-        c.innerHTML = '<p class="empty-message">Como administrador, use un código de invitado o cocinero para calificar.</p>';
-        return;
-    }
+    if (concursoFinalizado) { c.innerHTML = '<p class="empty-message">🔒 Concurso finalizado.</p>'; return; }
+    if (!appData.categorias.length) { c.innerHTML = '<p class="empty-message">No hay categorías.</p>'; return; }
+    if (sesionActual?.esAdmin) { c.innerHTML = '<p class="empty-message">Use código de invitado.</p>'; return; }
     
     const platos = appData.platos.filter(p => p.cocinero_id !== juezId);
-    
-    if (platos.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay platos disponibles para evaluar.</p>';
-        return;
-    }
+    if (!platos.length) { c.innerHTML = '<p class="empty-message">No hay platos para evaluar.</p>'; return; }
     
     c.innerHTML = platos.map(p => {
-        const calExistente = appData.calificaciones.find(cal => cal.plato_id === p.id && cal.juez_id === juezId);
+        const cal = appData.calificaciones.find(c => c.plato_id === p.id && c.juez_id === juezId);
         const co = obtenerParticipante(p.cocinero_id);
-        
-        let html = '<div class="voto-card">' +
-            '<div class="voto-card-header">' +
-                '<strong>🍽️ ' + p.nombre + '</strong>' +
-                '<span style="font-size:0.85rem;color:var(--text-light);">de ' + (co ? co.nombre : '?') + '</span>' +
-            '</div>' +
-            (p.descripcion ? '<p style="font-size:0.9rem;color:var(--text-light);margin-bottom:1rem;">' + p.descripcion + '</p>' : '');
-        
-        if (calExistente) {
-            html += '<div style="background:var(--card);padding:1rem;border-radius:8px;margin-bottom:0.5rem;">' +
-                '<strong>✅ Ya calificado</strong>';
-            
+        let html = '<div class="voto-card"><div class="voto-card-header"><strong>🍽️ ' + p.nombre + '</strong><span>de ' + (co?co.nombre:'?') + '</span></div>' + (p.descripcion?'<p>'+p.descripcion+'</p>':'');
+        if (cal) {
+            html += '<div style="background:var(--card);padding:1rem;border-radius:8px;"><strong>✅ Calificado</strong>';
             appData.categorias.forEach(cat => {
-                const punt = calExistente.puntuaciones && calExistente.puntuaciones[cat] ? calExistente.puntuaciones[cat] : 0;
-                html += '<div style="margin-top:0.3rem;">' +
-                    '<span style="font-size:0.85rem;">' + cat + ':</span> ' +
-                    '★'.repeat(punt) + '☆'.repeat(5-punt) + ' (' + punt + '/5)' +
-                    '</div>';
+                const punt = cal.puntuaciones?.[cat] || 0;
+                html += '<div>' + cat + ': ' + '★'.repeat(punt) + '☆'.repeat(5-punt) + '</div>';
             });
-            
-            if (calExistente.comentario) {
-                html += '<div style="margin-top:0.3rem;font-style:italic;color:var(--text-light);">💬 "' + calExistente.comentario + '"</div>';
-            }
-            
-            html += '<button class="btn-delete btn-small" style="margin-top:0.5rem;" onclick="window.cambiarCalificacion(\'' + calExistente.id + '\',\'' + juezId + '\')">✏️ Modificar Calificación</button>' +
-                '</div>';
+            if (cal.comentario) html += '<div>💬 "' + cal.comentario + '"</div>';
+            html += '<button class="btn-delete btn-small" onclick="window.cambiarCalificacion(\''+cal.id+'\',\''+juezId+'\')">✏️ Modificar</button></div>';
         } else {
             html += '<div style="background:var(--card);padding:1rem;border-radius:8px;">';
-            
             appData.categorias.forEach(cat => {
-                html += '<div class="categoria-voto">' +
-                    '<label>' + cat + ' (1-5):</label>' +
-                    '<div class="stars" data-plato="' + p.id + '" data-categoria="' + cat + '">' +
-                        [1,2,3,4,5].map(n => 
-                            '<span onclick="window.seleccionarEstrella(this, ' + n + ')" data-valor="' + n + '">★</span>'
-                        ).join('') +
-                    '</div>' +
-                    '<input type="hidden" class="puntuacion-hidden" data-categoria="' + cat + '" value="0">' +
-                '</div>';
+                html += '<div class="categoria-voto"><label>' + cat + ':</label><div class="stars">' +
+                    [1,2,3,4,5].map(n => '<span onclick="window.seleccionarEstrella(this,'+n+')">★</span>').join('') +
+                    '</div><input type="hidden" class="punt-hidden" data-cat="' + cat + '" value="0"></div>';
             });
-            
-            html += '<div class="form-group" style="margin-top:0.8rem;">' +
-                '<label>Comentario general (opcional):</label>' +
-                '<textarea class="comentario-general" placeholder="Un comentario sobre el plato..." rows="2" style="width:100%;"></textarea>' +
-                '</div>' +
-                '<button class="btn-primary btn-small" onclick="window.enviarCalificacion(\'' + p.id + '\',\'' + juezId + '\')">✅ Enviar Calificación</button>' +
-                '</div>';
+            html += '<textarea class="comentario" placeholder="Comentario..." rows="2"></textarea>' +
+                '<button class="btn-primary btn-small" onclick="window.enviarCal(\''+p.id+'\',\''+juezId+'\')">✅ Enviar</button></div>';
         }
-        
-        html += '</div>';
-        return html;
+        return html + '</div>';
     }).join('');
 }
 
-function seleccionarEstrella(elemento, valor) {
-    const starsDiv = elemento.parentElement;
-    const todasLasEstrellas = starsDiv.querySelectorAll('span');
-    const hiddenInput = starsDiv.parentElement.querySelector('.puntuacion-hidden');
-    
-    todasLasEstrellas.forEach((estrella, index) => {
-        if (index < valor) {
-            estrella.classList.add('active');
-            estrella.style.opacity = '1';
-        } else {
-            estrella.classList.remove('active');
-            estrella.style.opacity = '0.7';
-        }
-    });
-    
-    if (hiddenInput) hiddenInput.value = valor;
+function seleccionarEstrella(el, val) {
+    const stars = el.parentElement.querySelectorAll('span');
+    const hidden = el.parentElement.parentElement.querySelector('.punt-hidden');
+    stars.forEach((s, i) => { s.style.opacity = i < val ? '1' : '0.7'; });
+    if (hidden) hidden.value = val;
 }
 
-async function enviarCalificacion(platoId, juezId) {
-    if (concursoFinalizado) {
-        alert('🔒 El concurso ha finalizado. No se aceptan más calificaciones.');
-        return;
-    }
-    
-    const votoCard = document.querySelector('.voto-card:has(button[onclick*="' + platoId + '"])');
-    if (!votoCard) {
-        alert('Error: No se encontró el formulario de calificación.');
-        return;
-    }
-    
+function enviarCal(platoId, juezId) {
+    if (concursoFinalizado) { alert('🔒 Finalizado.'); return; }
+    const card = document.querySelector('.voto-card:has(button[onclick*="'+platoId+'"])');
     const puntuaciones = {};
-    const hiddenInputs = votoCard.querySelectorAll('.puntuacion-hidden');
-    
-    hiddenInputs.forEach(input => {
-        const categoria = input.dataset.categoria;
-        const valor = parseInt(input.value);
-        puntuaciones[categoria] = valor || 0;
-    });
-    
-    const sinCalificar = appData.categorias.filter(cat => !puntuaciones[cat] || puntuaciones[cat] === 0);
-    if (sinCalificar.length > 0) {
-        alert('⚠️ Por favor califique todas las categorías:\n' + sinCalificar.join(', '));
-        return;
-    }
-    
-    const comentarioInput = votoCard.querySelector('.comentario-general');
-    const comentario = comentarioInput ? comentarioInput.value.trim() : '';
-    
-    const id = generarId();
-    await apiCall('addCalificacion', { id, plato_id: platoId, juez_id: juezId, puntuaciones, comentario });
-    await refrescarDatos();
+    card.querySelectorAll('.punt-hidden').forEach(inp => { puntuaciones[inp.dataset.cat] = parseInt(inp.value) || 0; });
+    const sin = appData.categorias.filter(cat => !puntuaciones[cat] || puntuaciones[cat] === 0);
+    if (sin.length) { alert('Falta: ' + sin.join(', ')); return; }
+    const comentario = card.querySelector('.comentario')?.value.trim() || '';
+    appData.calificaciones.push({ id: generarId(), plato_id: platoId, juez_id: juezId, puntuaciones, comentario });
+    guardarDatosLocal();
     renderizarCalificacion(juezId);
-    
-    const plato = appData.platos.find(p => p.id === platoId);
-    alert('✅ ¡Calificación enviada correctamente!\n\nPlato: ' + (plato ? plato.nombre : 'Desconocido'));
+    alert('✅ ¡Calificado!');
 }
 
-async function cambiarCalificacion(calId, juezId) {
-    if (concursoFinalizado) {
-        alert('🔒 El concurso ha finalizado. No se pueden modificar calificaciones.');
-        return;
-    }
-    
-    if (!confirm('¿Desea modificar su calificación?\nSe eliminará la actual para que pueda volver a calificar.')) return;
-    
-    await apiCall('deleteCalificacion', { id: calId });
-    await refrescarDatos();
+function cambiarCalificacion(calId, juezId) {
+    if (concursoFinalizado) { alert('🔒 Finalizado.'); return; }
+    if (!confirm('¿Modificar?')) return;
+    appData.calificaciones = appData.calificaciones.filter(c => c.id !== calId);
+    guardarDatosLocal();
     renderizarCalificacion(juezId);
 }
 
 // ============ RESULTADOS ============
 function renderizarResultados() {
     const c = document.getElementById('tabla-resultados');
-    const podioDiv = document.getElementById('podio-final');
+    const podio = document.getElementById('podio-final');
     if (!c) return;
-    
-    if (appData.platos.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay platos para mostrar resultados.</p>';
-        if (podioDiv) podioDiv.style.display = 'none';
-        return;
-    }
-    
-    if (appData.categorias.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay categorías configuradas.</p>';
-        return;
-    }
-    
+    if (!appData.platos.length) { c.innerHTML = '<p class="empty-message">No hay platos.</p>'; return; }
     actualizarBannerFinalizado();
     
     const ranking = appData.platos.map(p => {
-        const cocinero = obtenerParticipante(p.cocinero_id);
-        const totalJuradosPosibles = appData.participantes.filter(
-            part => part.id !== p.cocinero_id
-        ).length;
-        
-        if (totalJuradosPosibles === 0) {
-            return {
-                ...p,
-                cocinero: cocinero,
-                promedio: 0,
-                totalVotos: 0,
-                totalJurados: 0,
-                detalleCategorias: {}
-            };
-        }
-        
+        const co = obtenerParticipante(p.cocinero_id);
+        const totalJ = appData.participantes.filter(pa => pa.id !== p.cocinero_id).length || 1;
         const cals = appData.calificaciones.filter(cal => cal.plato_id === p.id);
-        let sumaTotalCategorias = 0;
-        let cantidadCategorias = 0;
-        let detalleCategorias = {};
-        
+        let det = {}, suma = 0, cant = 0;
         appData.categorias.forEach(cat => {
-            const puntuacionesCat = cals
-                .filter(cal => cal.puntuaciones && cal.puntuaciones[cat] && cal.puntuaciones[cat] > 0)
-                .map(cal => cal.puntuaciones[cat]);
-            
-            const sumaPuntosCat = puntuacionesCat.reduce((s, v) => s + v, 0);
-            const promCat = totalJuradosPosibles > 0 ? sumaPuntosCat / totalJuradosPosibles : 0;
-            
-            detalleCategorias[cat] = Math.round(promCat * 10) / 10;
-            sumaTotalCategorias += promCat;
-            cantidadCategorias++;
+            const pts = cals.filter(cal => cal.puntuaciones?.[cat] > 0).map(cal => cal.puntuaciones[cat]);
+            const prom = pts.reduce((s,v)=>s+v,0) / totalJ;
+            det[cat] = Math.round(prom*10)/10;
+            suma += prom; cant++;
         });
-        
-        const promedioGeneral = cantidadCategorias > 0 ? sumaTotalCategorias / cantidadCategorias : 0;
-        
-        return {
-            ...p,
-            cocinero: cocinero,
-            promedio: Math.round(promedioGeneral * 10) / 10,
-            totalVotos: cals.length,
-            totalJurados: totalJuradosPosibles,
-            detalleCategorias
-        };
-    }).sort((a, b) => b.promedio - a.promedio);
+        return { ...p, cocinero: co, promedio: cant ? Math.round((suma/cant)*10)/10 : 0, totalVotos: cals.length, totalJurados: totalJ, detalle: det };
+    }).sort((a,b) => b.promedio - a.promedio);
     
-    // Podio
-    if (concursoFinalizado && podioDiv && ranking.length >= 3) {
-        podioDiv.style.display = 'block';
-        podioDiv.innerHTML = `
-            <h3 style="text-align:center;margin-bottom:1rem;">🥇 PODIO OFICIAL 🥇</h3>
-            <div class="podio-container">
-                <div class="podio-puesto podio-2">
-                    <div class="podio-bar">
-                        <div class="podio-medalla">🥈</div>
-                        <div class="podio-nombre-plato">${ranking[1].nombre}</div>
-                        <div class="podio-nombre-cocinero">${ranking[1].cocinero ? ranking[1].cocinero.nombre : '?'}</div>
-                        <div class="podio-puntos">${ranking[1].promedio.toFixed(1)}</div>
-                    </div>
-                    <div class="podio-label">2° Puesto</div>
-                </div>
-                
-                <div class="podio-puesto podio-1">
-                    <div class="podio-bar">
-                        <div class="podio-medalla">👑</div>
-                        <div class="podio-nombre-plato">${ranking[0].nombre}</div>
-                        <div class="podio-nombre-cocinero">${ranking[0].cocinero ? ranking[0].cocinero.nombre : '?'}</div>
-                        <div class="podio-puntos">${ranking[0].promedio.toFixed(1)}</div>
-                    </div>
-                    <div class="podio-label">🏆 CAMPEÓN</div>
-                </div>
-                
-                <div class="podio-puesto podio-3">
-                    <div class="podio-bar">
-                        <div class="podio-medalla">🥉</div>
-                        <div class="podio-nombre-plato">${ranking[2].nombre}</div>
-                        <div class="podio-nombre-cocinero">${ranking[2].cocinero ? ranking[2].cocinero.nombre : '?'}</div>
-                        <div class="podio-puntos">${ranking[2].promedio.toFixed(1)}</div>
-                    </div>
-                    <div class="podio-label">3° Puesto</div>
-                </div>
-            </div>
-        `;
-    } else if (podioDiv) {
-        podioDiv.style.display = 'none';
-    }
+    if (concursoFinalizado && ranking.length >= 3) {
+        podio.style.display = 'block';
+        podio.innerHTML = '<h3>🥇 PODIO 🥇</h3><div class="podio-container">' +
+            '<div class="podio-puesto podio-2"><div class="podio-bar"><div class="podio-medalla">🥈</div><div>'+ranking[1].nombre+'</div><div>'+ranking[1].promedio.toFixed(1)+'</div></div><div class="podio-label">2°</div></div>' +
+            '<div class="podio-puesto podio-1"><div class="podio-bar"><div class="podio-medalla">👑</div><div>'+ranking[0].nombre+'</div><div>'+ranking[0].promedio.toFixed(1)+'</div></div><div class="podio-label">🏆 CAMPEÓN</div></div>' +
+            '<div class="podio-puesto podio-3"><div class="podio-bar"><div class="podio-medalla">🥉</div><div>'+ranking[2].nombre+'</div><div>'+ranking[2].promedio.toFixed(1)+'</div></div><div class="podio-label">3°</div></div></div>';
+    } else { podio.style.display = 'none'; }
     
-    // Tabla de ranking
-    c.innerHTML = '<h3 style="margin-top:1rem;">📊 Clasificación General</h3>' + ranking.map((item, i) => {
-        const clase = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
-        const medalla = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
-        
-        let detalleHTML = '';
-        for (const [cat, punt] of Object.entries(item.detalleCategorias)) {
-            detalleHTML += '<span>📌 ' + cat + ': <strong>' + punt.toFixed(1) + '</strong></span>';
-        }
-        
-        const infoVotos = item.totalVotos + '/' + item.totalJurados + ' jurados';
-        
-        return '<div class="ranking-item ' + clase + '">' +
-            '<div class="rank-pos">' + (medalla || '#' + (i+1)) + '</div>' +
-            '<div class="rank-info">' +
-                '<strong>' + item.nombre + '</strong>' +
-                '<div style="font-size:0.85rem;color:var(--text-light);">por ' + (item.cocinero ? item.cocinero.nombre : '?') + '</div>' +
-                '<div style="font-size:0.8rem;">' + infoVotos + '</div>' +
-                '<div class="rank-detalle">' + detalleHTML + '</div>' +
-            '</div>' +
-            '<div class="rank-puntos">' + item.promedio.toFixed(1) + '</div>' +
-        '</div>';
+    c.innerHTML = '<h3>📊 Clasificación</h3>' + ranking.map((item, i) => {
+        let dh = '';
+        for (const [k,v] of Object.entries(item.detalle)) dh += '<span>📌 '+k+': <strong>'+v.toFixed(1)+'</strong></span>';
+        return '<div class="ranking-item rank-'+(i<3?i+1:'')+'"><div class="rank-pos">'+(['🥇','🥈','🥉'][i]||'#'+(i+1))+'</div><div class="rank-info"><strong>'+item.nombre+'</strong><div>'+item.totalVotos+'/'+item.totalJurados+' jurados</div><div class="rank-detalle">'+dh+'</div></div><div class="rank-puntos">'+item.promedio.toFixed(1)+'</div></div>';
     }).join('');
 }
 
-// ============ EXPORTAR FUNCIONES GLOBALES ============
+// ============ GLOBALES ============
 window.eliminarParticipante = eliminarParticipante;
 window.eliminarPlato = eliminarPlato;
 window.eliminarCategoria = eliminarCategoria;
 window.seleccionarEstrella = seleccionarEstrella;
-window.enviarCalificacion = enviarCalificacion;
+window.enviarCal = enviarCal;
 window.cambiarCalificacion = cambiarCalificacion;
