@@ -317,7 +317,7 @@ function hacerLogin() {
         return;
     }
     
-    const participante = appData.participantes.find(p => p.codigo === codigo);
+    const participante = appData.participantes.find(p => String(p.codigo) === codigo);
     if (!participante) {
         if (errorDiv) { errorDiv.textContent = 'Código no encontrado.'; errorDiv.style.display = 'block'; }
         document.getElementById('codigo-input').value = '';
