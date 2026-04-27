@@ -1,9 +1,11 @@
 // ============ CONFIGURACIÓN ============
 const CODIGO_ADMIN = '123456';
+let concursoFinalizado = false; // AGREGAR ESTA LÍNEA
 
 const STORAGE_KEY = 'concurso_falopas_data';
 const SESSION_KEY = 'concurso_falopas_session';
 const THEME_KEY = 'concurso_falopas_theme';
+const FINALIZADO_KEY = 'concurso_falopas_finalizado'; // AGREGAR ESTA LÍNEA
 
 const CATEGORIAS_DEFAULT = ['Presentación', 'Sabor', 'Originalidad', 'Bebida'];
 
@@ -53,6 +55,8 @@ function cargarDatos() {
         const sesion = localStorage.getItem(SESSION_KEY);
         if (sesion) sesionActual = JSON.parse(sesion);
     } catch(e) {}
+    
+    concursoFinalizado = localStorage.getItem(FINALIZADO_KEY) === 'true';
 }
 
 function guardarDatos() {
@@ -172,6 +176,11 @@ function configurarEventos() {
     
     document.getElementById('btn-cerrar-sesion')?.addEventListener('click', cerrarSesion);
     document.getElementById('btn-actualizar-resultados')?.addEventListener('click', renderizarResultados);
+       // Botón finalizar concurso
+    const btnFinalizar = document.getElementById('btn-finalizar');
+    if (btnFinalizar) {
+        btnFinalizar.addEventListener('click', finalizarConcurso);
+    }
 }
 
 // ============ UTILIDADES ============
@@ -189,6 +198,115 @@ function generarCodigo() {
         codigo = Math.floor(100000 + Math.random() * 900000).toString();
     } while (appData.participantes.some(p => p.codigo === codigo) || codigo === CODIGO_ADMIN);
     return codigo;
+}
+// ============ FINALIZAR CONCURSO ============
+function finalizarConcurso() {
+    if (!sesionActual || !sesionActual.esAdmin) {
+        alert('Solo el administrador puede finalizar el concurso.');
+        return;
+    }
+    
+    if (concursoFinalizado) {
+        alert('El concurso ya está finalizado.');
+        return;
+    }
+    
+    if (appData.platos.length === 0) {
+        alert('No hay platos registrados para finalizar el concurso.');
+        return;
+    }
+    
+    if (!confirm('⚠️ ¿Está seguro de FINALIZAR el concurso?\n\n' +
+                 '• Se mostrarán los resultados oficiales\n' +
+                 '• Se bloquearán las votaciones\n' +
+                 '• Esta acción no se puede deshacer\n\n' +
+                 '¿Continuar?')) {
+        return;
+    }
+    
+    concursoFinalizado = true;
+    localStorage.setItem(FINALIZADO_KEY, 'true');
+    
+    // Efecto de confetti
+    lanzarConfetti();
+    
+    // Actualizar UI
+    actualizarBannerFinalizado();
+    renderizarResultados();
+    mostrarPanel('resultados');
+    
+    // Bloquear panel de calificación
+    const platosCalificar = document.getElementById('platos-a-calificar');
+    if (platosCalificar) {
+        platosCalificar.innerHTML = '<div class="votacion-bloqueada" style="padding:3rem;text-align:center;">' +
+            '<p class="empty-message">🔒 El concurso ha finalizado. Las votaciones están cerradas.</p>' +
+            '</div>';
+    }
+    
+    alert('🏆 ¡Concurso Finalizado! 🏆\n\nResultados oficiales publicados.');
+}
+
+function revertirFinalizacion() {
+    if (!sesionActual || !sesionActual.esAdmin) {
+        alert('Solo el administrador puede revertir la finalización.');
+        return;
+    }
+    
+    if (!concursoFinalizado) return;
+    
+    if (!confirm('¿Revertir la finalización del concurso?\nSe habilitarán las votaciones nuevamente.')) return;
+    
+    concursoFinalizado = false;
+    localStorage.setItem(FINALIZADO_KEY, 'false');
+    actualizarBannerFinalizado();
+    renderizarResultados();
+    alert('✅ Concurso reabierto. Los participantes pueden volver a votar.');
+}
+
+function actualizarBannerFinalizado() {
+    const banner = document.getElementById('banner-finalizado');
+    const btnFinalizar = document.getElementById('btn-finalizar');
+    const podio = document.getElementById('podio-final');
+    
+    if (concursoFinalizado) {
+        if (banner) banner.style.display = 'block';
+        if (btnFinalizar) {
+            btnFinalizar.textContent = '🔄 Reabrir Concurso';
+            btnFinalizar.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
+            btnFinalizar.style.color = '#fff';
+            btnFinalizar.onclick = revertirFinalizacion;
+        }
+        if (podio) podio.style.display = 'block';
+    } else {
+        if (banner) banner.style.display = 'none';
+        if (btnFinalizar) {
+            btnFinalizar.textContent = '🏆 Finalizar Concurso';
+            btnFinalizar.style.background = 'linear-gradient(135deg, #FFD700, #FFA500)';
+            btnFinalizar.style.color = '#1a1a2e';
+            btnFinalizar.onclick = finalizarConcurso;
+        }
+        if (podio) podio.style.display = 'none';
+    }
+}
+
+function lanzarConfetti() {
+    const colores = ['#FFD700', '#FF6B6B', '#4ECDC4', '#FFA500', '#C9A96E', '#FF69B4', '#00D2FF'];
+    
+    for (let i = 0; i < 80; i++) {
+        setTimeout(() => {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti';
+            confetti.style.left = Math.random() * 100 + '%';
+            confetti.style.width = (Math.random() * 10 + 5) + 'px';
+            confetti.style.height = (Math.random() * 10 + 5) + 'px';
+            confetti.style.background = colores[Math.floor(Math.random() * colores.length)];
+            confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
+            confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+            document.body.appendChild(confetti);
+            
+            setTimeout(() => confetti.remove(), 3000);
+        }, i * 30);
+    }
 }
 
 // ============ NAVEGACIÓN ============
@@ -456,19 +574,29 @@ function renderizarCalificacion(juezId) {
     const c = document.getElementById('platos-a-calificar');
     if (!c) return;
     
+    // Si el concurso está finalizado, bloquear
+    if (concursoFinalizado) {
+        c.innerHTML = '<div class="votacion-bloqueada" style="padding:3rem;text-align:center;">' +
+            '<p class="empty-message">🔒 El concurso ha finalizado. Las votaciones están cerradas.</p>' +
+            '</div>';
+        return;
+    }
+    
     if (appData.categorias.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay categorías configuradas.</p>';
+        c.innerHTML = '<p class="empty-message">No hay categorías configuradas. Contacte al administrador.</p>';
         return;
     }
     
     if (sesionActual && sesionActual.esAdmin) {
-        c.innerHTML = '<p class="empty-message">Como admin, use un código de invitado para calificar.</p>';
+        c.innerHTML = '<p class="empty-message">Como administrador, use un código de invitado o cocinero para calificar.</p>';
         return;
     }
     
+    // Filtrar platos: no se puede calificar el propio
     const platos = appData.platos.filter(p => p.cocinero_id !== juezId);
+    
     if (platos.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay platos para evaluar.</p>';
+        c.innerHTML = '<p class="empty-message">No hay platos disponibles para evaluar. Espere a que otros cocineros registren sus platos.</p>';
         return;
     }
     
@@ -476,26 +604,58 @@ function renderizarCalificacion(juezId) {
         const calExistente = appData.calificaciones.find(cal => cal.plato_id === p.id && cal.juez_id === juezId);
         const co = obtenerParticipante(p.cocinero_id);
         
-        let html = '<div class="voto-card"><div class="voto-card-header"><strong>🍽️ ' + p.nombre + '</strong><span>de ' + (co ? co.nombre : '?') + '</span></div>' +
-            (p.descripcion ? '<p>' + p.descripcion + '</p>' : '');
+        let html = '<div class="voto-card">' +
+            '<div class="voto-card-header">' +
+                '<strong>🍽️ ' + p.nombre + '</strong>' +
+                '<span style="font-size:0.85rem;color:var(--text-light);">de ' + (co ? co.nombre : '?') + '</span>' +
+            '</div>' +
+            (p.descripcion ? '<p style="font-size:0.9rem;color:var(--text-light);margin-bottom:1rem;">' + p.descripcion + '</p>' : '');
         
         if (calExistente) {
-            html += '<div style="background:var(--card);padding:1rem;border-radius:8px;"><strong>✅ Ya calificado</strong>';
+            // Mostrar calificación existente
+            html += '<div style="background:var(--card);padding:1rem;border-radius:8px;margin-bottom:0.5rem;">' +
+                '<strong>✅ Ya calificado</strong>';
+            
             appData.categorias.forEach(cat => {
                 const punt = calExistente.puntuaciones && calExistente.puntuaciones[cat] ? calExistente.puntuaciones[cat] : 0;
-                html += '<div>' + cat + ': ' + '★'.repeat(punt) + '☆'.repeat(5-punt) + ' (' + punt + '/5)</div>';
+                html += '<div style="margin-top:0.3rem;">' +
+                    '<span style="font-size:0.85rem;">' + cat + ':</span> ' +
+                    '★'.repeat(punt) + '☆'.repeat(5-punt) + ' (' + punt + '/5)' +
+                    '</div>';
             });
-            html += (calExistente.comentario ? '<div>💬 "' + calExistente.comentario + '"</div>' : '') +
-                '<button class="btn-delete btn-small" onclick="window.cambiarCalificacion(\'' + calExistente.id + '\',\'' + juezId + '\')">Modificar</button></div>';
+            
+            if (calExistente.comentario) {
+                html += '<div style="margin-top:0.3rem;font-style:italic;color:var(--text-light);">💬 "' + calExistente.comentario + '"</div>';
+            }
+            
+            html += '<button class="btn-delete btn-small" style="margin-top:0.5rem;" onclick="window.cambiarCalificacion(\'' + calExistente.id + '\',\'' + juezId + '\')">✏️ Modificar Calificación</button>' +
+                '</div>';
         } else {
+            // Formulario para calificar
             html += '<div style="background:var(--card);padding:1rem;border-radius:8px;">';
+            
+            // Categorías con estrellas
             appData.categorias.forEach(cat => {
-                html += '<div class="categoria-voto"><label>' + cat + ' (1-5):</label><div class="stars" data-plato="' + p.id + '" data-categoria="' + cat + '">' +
-                    [1,2,3,4,5].map(n => '<span onclick="window.seleccionarEstrella(this, ' + n + ')" data-valor="' + n + '">★</span>').join('') +
-                    '</div><input type="hidden" class="puntuacion-hidden" data-categoria="' + cat + '" value="0"></div>';
+                html += '<div class="categoria-voto">' +
+                    '<label>' + cat + ' (1-5):</label>' +
+                    '<div class="stars" data-plato="' + p.id + '" data-categoria="' + cat + '">' +
+                        [1,2,3,4,5].map(n => 
+                            '<span onclick="window.seleccionarEstrella(this, ' + n + ')" data-valor="' + n + '">★</span>'
+                        ).join('') +
+                    '</div>' +
+                    '<input type="hidden" class="puntuacion-hidden" data-categoria="' + cat + '" value="0">' +
+                '</div>';
             });
-            html += '<div class="form-group"><label>Comentario:</label><textarea class="comentario-general" rows="2"></textarea></div>' +
-                '<button class="btn-primary btn-small" onclick="window.enviarCalificacion(\'' + p.id + '\',\'' + juezId + '\')">✅ Enviar Calificación</button></div>';
+            
+            // Comentario general
+            html += '<div class="form-group" style="margin-top:0.8rem;">' +
+                '<label>Comentario general (opcional):</label>' +
+                '<textarea class="comentario-general" placeholder="Un comentario sobre el plato..." rows="2" style="width:100%;"></textarea>' +
+                '</div>';
+            
+            // Botón de enviar
+            html += '<button class="btn-primary btn-small" onclick="window.enviarCalificacion(\'' + p.id + '\',\'' + juezId + '\')">✅ Enviar Calificación</button>' +
+                '</div>';
         }
         
         html += '</div>';
@@ -503,38 +663,72 @@ function renderizarCalificacion(juezId) {
     }).join('');
 }
 
+// Seleccionar estrella individual
 function seleccionarEstrella(elemento, valor) {
     const starsDiv = elemento.parentElement;
-    const todas = starsDiv.querySelectorAll('span');
-    const hidden = starsDiv.parentElement.querySelector('.puntuacion-hidden');
+    const todasLasEstrellas = starsDiv.querySelectorAll('span');
+    const hiddenInput = starsDiv.parentElement.querySelector('.puntuacion-hidden');
     
-    todas.forEach((estrella, i) => {
-        estrella.style.opacity = i < valor ? '1' : '0.7';
-        estrella.classList.toggle('active', i < valor);
+    todasLasEstrellas.forEach((estrella, index) => {
+        if (index < valor) {
+            estrella.classList.add('active');
+            estrella.style.opacity = '1';
+        } else {
+            estrella.classList.remove('active');
+            estrella.style.opacity = '0.7';
+        }
     });
     
-    if (hidden) hidden.value = valor;
+    if (hiddenInput) {
+        hiddenInput.value = valor;
+    }
 }
 
+// Enviar calificación completa
 function enviarCalificacion(platoId, juezId) {
-    const votoCard = document.querySelector('.voto-card:has(button[onclick*="' + platoId + '"])');
-    if (!votoCard) return;
+    // Verificar si el concurso está finalizado
+    if (concursoFinalizado) {
+        alert('🔒 El concurso ha finalizado. No se aceptan más calificaciones.');
+        return;
+    }
     
+    const votoCard = document.querySelector('.voto-card:has(button[onclick*="' + platoId + '"])');
+    if (!votoCard) {
+        alert('Error: No se encontró el formulario de calificación.');
+        return;
+    }
+    
+    // Recolectar puntuaciones por categoría
     const puntuaciones = {};
     const hiddenInputs = votoCard.querySelectorAll('.puntuacion-hidden');
     
     hiddenInputs.forEach(input => {
-        puntuaciones[input.dataset.categoria] = parseInt(input.value) || 0;
+        const categoria = input.dataset.categoria;
+        const valor = parseInt(input.value);
+        puntuaciones[categoria] = valor || 0;
     });
     
+    // Verificar que todas las categorías tengan puntuación
     const sinCalificar = appData.categorias.filter(cat => !puntuaciones[cat] || puntuaciones[cat] === 0);
     if (sinCalificar.length > 0) {
-        alert('Califique todas las categorías: ' + sinCalificar.join(', '));
+        alert('⚠️ Por favor califique todas las categorías:\n' + sinCalificar.join(', ') + 
+              '\n\nDebe seleccionar al menos 1 estrella en cada una.');
         return;
     }
     
-    const comentario = votoCard.querySelector('.comentario-general')?.value.trim() || '';
+    // Validar que todas las puntuaciones estén entre 1 y 5
+    for (const [cat, punt] of Object.entries(puntuaciones)) {
+        if (punt < 1 || punt > 5) {
+            alert('⚠️ Error en la categoría "' + cat + '": la puntuación debe ser entre 1 y 5.');
+            return;
+        }
+    }
     
+    // Obtener comentario
+    const comentarioInput = votoCard.querySelector('.comentario-general');
+    const comentario = comentarioInput ? comentarioInput.value.trim() : '';
+    
+    // Guardar calificación
     appData.calificaciones.push({
         id: generarId(),
         plato_id: platoId,
@@ -545,21 +739,22 @@ function enviarCalificacion(platoId, juezId) {
     
     guardarDatos();
     renderizarCalificacion(juezId);
+    
+    // Mostrar confirmación
+    const plato = obtenerPlato(platoId);
+    alert('✅ ¡Calificación enviada correctamente!\n\nPlato: ' + (plato ? plato.nombre : 'Desconocido'));
 }
 
-function cambiarCalificacion(calId, juezId) {
-    appData.calificaciones = appData.calificaciones.filter(c => c.id !== calId);
-    guardarDatos();
-    renderizarCalificacion(juezId);
-}
 
 // ============ RESULTADOS ============
 function renderizarResultados() {
     const c = document.getElementById('tabla-resultados');
+    const podioDiv = document.getElementById('podio-final');
     if (!c) return;
     
     if (appData.platos.length === 0) {
         c.innerHTML = '<p class="empty-message">No hay platos.</p>';
+        if (podioDiv) podioDiv.style.display = 'none';
         return;
     }
     
@@ -568,15 +763,14 @@ function renderizarResultados() {
         return;
     }
     
+    actualizarBannerFinalizado();
+    
     const ranking = appData.platos.map(p => {
         const cocinero = obtenerParticipante(p.cocinero_id);
-        
-        // TOTAL DE JURADOS POSIBLES: todos los participantes menos el dueño del plato
         const totalJuradosPosibles = appData.participantes.filter(
             part => part.id !== p.cocinero_id
         ).length;
         
-        // Si no hay jurados posibles, no se puede evaluar
         if (totalJuradosPosibles === 0) {
             return {
                 ...p,
@@ -589,21 +783,16 @@ function renderizarResultados() {
         }
         
         const cals = appData.calificaciones.filter(cal => cal.plato_id === p.id);
-        
         let detalleCategorias = {};
         let sumaTotalCategorias = 0;
         let cantidadCategorias = 0;
         
         appData.categorias.forEach(cat => {
-            // Sumar todas las puntuaciones de esta categoría
             const puntuacionesCat = cals
                 .filter(cal => cal.puntuaciones && cal.puntuaciones[cat] && cal.puntuaciones[cat] > 0)
                 .map(cal => cal.puntuaciones[cat]);
             
-            // Suma total de puntos en esta categoría
             const sumaPuntosCat = puntuacionesCat.reduce((s, v) => s + v, 0);
-            
-            // DIVIDIR ENTRE EL TOTAL DE JURADOS POSIBLES (no solo los que votaron)
             const promCat = totalJuradosPosibles > 0 ? sumaPuntosCat / totalJuradosPosibles : 0;
             
             detalleCategorias[cat] = Math.round(promCat * 10) / 10;
@@ -611,7 +800,6 @@ function renderizarResultados() {
             cantidadCategorias++;
         });
         
-        // Promedio general: promedio de todas las categorías
         const promedioGeneral = cantidadCategorias > 0 ? sumaTotalCategorias / cantidadCategorias : 0;
         
         return {
@@ -624,7 +812,52 @@ function renderizarResultados() {
         };
     }).sort((a, b) => b.promedio - a.promedio);
     
-    c.innerHTML = ranking.map((item, i) => {
+    // Renderizar podio si está finalizado
+    if (concursoFinalizado && podioDiv && ranking.length >= 3) {
+        podioDiv.style.display = 'block';
+        podioDiv.innerHTML = `
+            <h3 style="text-align:center;margin-bottom:1rem;">🥇 PODIO OFICIAL 🥇</h3>
+            <div class="podio-container">
+                <!-- 2do puesto -->
+                <div class="podio-puesto podio-2">
+                    <div class="podio-bar">
+                        <div class="podio-medalla">🥈</div>
+                        <div class="podio-nombre-plato">${ranking[1].nombre}</div>
+                        <div class="podio-nombre-cocinero">${ranking[1].cocinero ? ranking[1].cocinero.nombre : '?'}</div>
+                        <div class="podio-puntos">${ranking[1].promedio.toFixed(1)}</div>
+                    </div>
+                    <div class="podio-label">2° Puesto</div>
+                </div>
+                
+                <!-- 1er puesto -->
+                <div class="podio-puesto podio-1">
+                    <div class="podio-bar">
+                        <div class="podio-medalla">👑</div>
+                        <div class="podio-nombre-plato">${ranking[0].nombre}</div>
+                        <div class="podio-nombre-cocinero">${ranking[0].cocinero ? ranking[0].cocinero.nombre : '?'}</div>
+                        <div class="podio-puntos">${ranking[0].promedio.toFixed(1)}</div>
+                    </div>
+                    <div class="podio-label">🏆 CAMPEÓN</div>
+                </div>
+                
+                <!-- 3er puesto -->
+                <div class="podio-puesto podio-3">
+                    <div class="podio-bar">
+                        <div class="podio-medalla">🥉</div>
+                        <div class="podio-nombre-plato">${ranking[2].nombre}</div>
+                        <div class="podio-nombre-cocinero">${ranking[2].cocinero ? ranking[2].cocinero.nombre : '?'}</div>
+                        <div class="podio-puntos">${ranking[2].promedio.toFixed(1)}</div>
+                    </div>
+                    <div class="podio-label">3° Puesto</div>
+                </div>
+            </div>
+        `;
+    } else if (podioDiv) {
+        podioDiv.style.display = 'none';
+    }
+    
+    // Renderizar tabla de ranking
+    c.innerHTML = '<h3 style="margin-top:1rem;">📊 Clasificación General</h3>' + ranking.map((item, i) => {
         const clase = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
         const medalla = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
         
@@ -633,7 +866,6 @@ function renderizarResultados() {
             detalleHTML += '<span>📌 ' + cat + ': <strong>' + punt.toFixed(1) + '</strong></span>';
         }
         
-        // Mostrar cuántos votaron del total
         const infoVotos = item.totalVotos + '/' + item.totalJurados + ' jurados';
         
         return '<div class="ranking-item ' + clase + '">' +
