@@ -22,13 +22,13 @@
 }
 
 [data-theme="dark"] {
-    --bg: #1a1a2e;
-    --card: #252540;
+    --bg: #12121f;
+    --card: #1e1e35;
     --text: #e0d5c1;
     --text-light: #a09880;
     --border: #3a3a50;
-    --shadow: 0 2px 8px rgba(0,0,0,0.3);
-    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+    --shadow: 0 2px 8px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.6);
 }
 
 * {
@@ -47,7 +47,7 @@ body {
 }
 
 .container {
-    max-width: 850px;
+    max-width: 900px;
     margin: 0 auto;
     padding: 1.5rem;
 }
@@ -59,7 +59,6 @@ header {
     box-shadow: var(--shadow-lg);
     margin-bottom: 1.5rem;
     overflow: hidden;
-    transition: background 0.3s;
 }
 
 .header-top {
@@ -75,12 +74,15 @@ h1 {
     font-weight: 700;
     color: var(--primary);
     letter-spacing: 1px;
-    margin: 0;
+}
+
+[data-theme="dark"] h1 {
+    color: var(--accent);
 }
 
 .theme-btn {
     background: var(--nav-bg);
-    color: var(--nav-text);
+    color: #fff;
     border: none;
     width: 44px;
     height: 44px;
@@ -96,32 +98,31 @@ h1 {
 
 .theme-btn:hover {
     transform: rotate(15deg);
-    box-shadow: var(--shadow-lg);
 }
 
 /* ============ NAVEGACIÓN ============ */
 nav {
     display: flex;
     background: var(--nav-bg);
-    padding: 0.6rem 1rem;
-    gap: 0.3rem;
+    padding: 0.4rem 0.8rem;
+    gap: 0.2rem;
+    flex-wrap: wrap;
 }
 
 .nav-btn {
-    flex: 1;
     padding: 0.7rem 0.8rem;
     background: transparent;
     color: #a09880;
     border: none;
     font-family: 'Georgia', serif;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 600;
     cursor: pointer;
     letter-spacing: 0.5px;
     transition: all 0.3s;
     text-transform: uppercase;
     border-radius: 6px;
-    position: relative;
+    white-space: nowrap;
 }
 
 .nav-btn:hover {
@@ -143,15 +144,14 @@ nav {
     border-radius: 12px;
     box-shadow: var(--shadow-lg);
     margin-bottom: 1.5rem;
-    animation: fadeSlideIn 0.3s ease;
-    transition: background 0.3s;
+    animation: fadeIn 0.3s ease;
 }
 
 .panel.active {
     display: block;
 }
 
-@keyframes fadeSlideIn {
+@keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
 }
@@ -162,23 +162,38 @@ h2 {
     margin-bottom: 1.5rem;
     padding-bottom: 0.8rem;
     border-bottom: 2px solid var(--accent);
-    letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] h2 {
+    color: var(--accent);
 }
 
 h3 {
     font-size: 1.1rem;
     color: var(--text-light);
     margin: 1.5rem 0 1rem;
-    font-weight: 600;
+}
+
+/* ============ BANNER ADMIN ============ */
+.admin-banner {
+    background: #1a1a2e;
+    color: var(--accent);
+    text-align: center;
+    padding: 0.5rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
 }
 
 /* ============ FORMULARIOS ============ */
 form {
     background: var(--bg);
-    padding: 1.8rem;
+    padding: 1.5rem;
     border-radius: 10px;
     margin-bottom: 1.5rem;
-    transition: background 0.3s;
 }
 
 .form-group {
@@ -228,12 +243,7 @@ small {
     font-style: italic;
 }
 
-button {
-    cursor: pointer;
-    font-family: 'Georgia', serif;
-    transition: all 0.3s;
-}
-
+/* ============ BOTONES ============ */
 .btn-primary {
     width: 100%;
     padding: 0.9rem;
@@ -243,8 +253,11 @@ button {
     border-radius: 8px;
     font-size: 0.95rem;
     font-weight: 700;
+    font-family: 'Georgia', serif;
     text-transform: uppercase;
     letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.3s;
     margin-top: 0.5rem;
 }
 
@@ -257,32 +270,42 @@ button {
     width: 100%;
     padding: 0.9rem;
     background: var(--primary);
-    color: #ffffff;
+    color: #fff;
     border: none;
     border-radius: 8px;
     font-size: 0.95rem;
     font-weight: 600;
+    font-family: 'Georgia', serif;
+    cursor: pointer;
     margin-bottom: 1.5rem;
 }
 
 .btn-secondary:hover {
     opacity: 0.9;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 .btn-danger {
     width: 100%;
     padding: 0.8rem;
     background: var(--danger);
-    color: #ffffff;
+    color: #fff;
     border: none;
     border-radius: 8px;
     font-weight: 600;
+    font-family: 'Georgia', serif;
+    cursor: pointer;
     margin-top: 1rem;
 }
 
 .btn-danger:hover {
     background: var(--danger-hover);
+}
+
+.btn-small {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+    width: auto;
+    margin-top: 0;
 }
 
 /* ============ LOGIN ============ */
@@ -291,16 +314,6 @@ button {
     margin-top: 1.5rem;
     padding-top: 1rem;
     border-top: 1px solid var(--border);
-}
-
-.login-footer a {
-    color: var(--accent);
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.login-footer a:hover {
-    text-decoration: underline;
 }
 
 .error-message {
@@ -318,7 +331,7 @@ button {
 /* ============ SESIÓN ============ */
 .session-card {
     background: linear-gradient(135deg, var(--primary) 0%, #2c2c4a 100%);
-    color: #ffffff;
+    color: #fff;
     padding: 2rem;
     border-radius: 12px;
     margin-top: 1rem;
@@ -333,25 +346,19 @@ button {
 
 .session-info p {
     margin: 0.6rem 0;
-    font-size: 1rem;
 }
 
 .session-info strong {
     color: var(--accent);
 }
 
-/* ============ TARJETAS ============ */
+/* ============ CARDS ============ */
 .card {
     background: var(--bg);
     padding: 1.2rem;
     border-radius: 10px;
     margin-bottom: 0.8rem;
     border-left: 4px solid var(--accent);
-    transition: all 0.3s;
-}
-
-.card:hover {
-    box-shadow: var(--shadow);
 }
 
 .card-header {
@@ -359,11 +366,8 @@ button {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.5rem;
-}
-
-.card-header strong {
-    font-size: 1.05rem;
-    color: var(--primary);
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 /* ============ BADGES ============ */
@@ -374,7 +378,6 @@ button {
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
 }
 
 .badge-cocinero {
@@ -389,34 +392,80 @@ button {
     border: 1px solid #aaa;
 }
 
+/* ============ CATEGORÍAS ============ */
+.categoria-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 1rem;
+    background: var(--bg);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--border);
+}
+
+.categoria-nombre {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.categoria-default {
+    font-size: 0.7rem;
+    color: var(--text-light);
+    font-style: italic;
+}
+
 /* ============ VOTACIÓN ============ */
 .info-bar {
     background: var(--bg);
     padding: 1rem 1.2rem;
     border-radius: 8px;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     font-weight: 600;
     border-left: 4px solid var(--accent);
 }
 
+#categorias-activas-info {
+    margin-bottom: 1rem;
+    padding: 0.8rem;
+    background: var(--bg);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
 .voto-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
     padding: 1.2rem;
     margin-bottom: 1rem;
     background: var(--bg);
     border-radius: 10px;
     border-left: 4px solid var(--accent);
-    transition: all 0.3s;
 }
 
-.voto-card:hover {
-    box-shadow: var(--shadow);
+.voto-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.categoria-voto {
+    margin-bottom: 1rem;
+    padding: 0.8rem;
+    background: var(--card);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.categoria-voto label {
+    font-size: 0.8rem;
+    margin-bottom: 0.3rem;
 }
 
 .stars {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     cursor: pointer;
     user-select: none;
 }
@@ -432,6 +481,10 @@ button {
     opacity: 1;
 }
 
+.stars span.active {
+    opacity: 1;
+}
+
 .btn-delete {
     background: transparent;
     color: var(--danger);
@@ -440,7 +493,7 @@ button {
     border-radius: 6px;
     font-size: 0.8rem;
     cursor: pointer;
-    margin-top: 0.4rem;
+    font-family: 'Georgia', serif;
 }
 
 .btn-delete:hover {
@@ -451,50 +504,52 @@ button {
 /* ============ RANKING ============ */
 .ranking-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     padding: 1.2rem;
     margin-bottom: 0.6rem;
     background: var(--bg);
     border-radius: 10px;
     border-left: 5px solid var(--accent);
-    transition: all 0.3s;
-}
-
-.ranking-item:hover {
-    box-shadow: var(--shadow);
+    gap: 1rem;
 }
 
 .rank-pos {
     font-size: 2rem;
     font-weight: 700;
-    margin-right: 1.2rem;
     min-width: 45px;
     color: var(--accent);
+    text-align: center;
 }
 
 .rank-info {
     flex: 1;
 }
 
-.rank-info strong {
-    font-size: 1.1rem;
-}
-
 .rank-puntos {
     font-size: 1.6rem;
     font-weight: 700;
     color: var(--accent);
+    text-align: right;
+    min-width: 50px;
 }
 
-.rank-1 { border-left-color: var(--gold); background: #fdf8f0; }
-.rank-2 { border-left-color: var(--silver); background: #f8f8f8; }
-.rank-3 { border-left-color: var(--bronze); background: #fdf5f0; }
+.rank-1 { border-left-color: var(--gold); }
+.rank-2 { border-left-color: var(--silver); }
+.rank-3 { border-left-color: var(--bronze); }
 
-[data-theme="dark"] .rank-1 { background: #2c2418; }
-[data-theme="dark"] .rank-2 { background: #252525; }
-[data-theme="dark"] .rank-3 { background: #2c2018; }
+.rank-detalle {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 0.3rem;
+}
 
-/* ============ MENSAJE VACÍO ============ */
+.rank-detalle span {
+    display: inline-block;
+    margin-right: 0.8rem;
+    margin-bottom: 0.2rem;
+}
+
+/* ============ EMPTY ============ */
 .empty-message {
     text-align: center;
     padding: 2.5rem;
@@ -516,39 +571,11 @@ footer {
 /* ============ RESPONSIVE ============ */
 @media (max-width: 768px) {
     .container { padding: 0.8rem; }
-    .header-top { padding: 1.2rem; }
-    h1 { font-size: 1.4rem; }
-    .panel { padding: 1.5rem; }
-    h2 { font-size: 1.2rem; }
-    nav { padding: 0.4rem; }
-    .nav-btn { font-size: 0.7rem; padding: 0.6rem 0.5rem; }
-    .voto-card { flex-direction: column; align-items: flex-start; gap: 0.8rem; }
+    .header-top { padding: 1rem; }
+    h1 { font-size: 1.3rem; }
+    .panel { padding: 1.2rem; }
+    .nav-btn { font-size: 0.7rem; padding: 0.6rem 0.4rem; }
+    #codigo-input { font-size: 1.2rem; letter-spacing: 0.5rem; }
     .ranking-item { flex-wrap: wrap; }
     .rank-puntos { margin-left: auto; }
-    #codigo-input { font-size: 1.2rem; letter-spacing: 0.5rem; }
-}
-
-@media (max-width: 480px) {
-    h1 { font-size: 1.2rem; }
-    .nav-btn { font-size: 0.65rem; letter-spacing: 0; }
-    .panel { padding: 1rem; }
-}
-
-/* ============ BANNER ADMIN ============ */
-.admin-banner {
-    background: #1a1a2e;
-    color: var(--accent);
-    text-align: center;
-    padding: 0.5rem;
-    border-radius: 8px;
-    margin-bottom: 1rem;
-    font-weight: 700;
-    font-size: 0.85rem;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-}
-
-/* ============ NAV OCULTO ============ */
-.nav-btn.hidden {
-    display: none !important;
 }
