@@ -887,4 +887,3 @@ window.eliminarPlato = eliminarPlato;
 window.eliminarCategoria = eliminarCategoria;
 window.seleccionarEstrella = seleccionarEstrella;
 window.enviarCalificacion = enviarCalificacion;
-window.cambiarCalificacion = cambiarCalificacion;
