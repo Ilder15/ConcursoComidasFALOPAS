@@ -17,11 +17,7 @@
             </div>
             
             <nav id="nav">
-                <button class="nav-btn active" data-tab="login">Iniciar Sesión</button>
-                <button class="nav-btn" data-tab="registro">Registro</button>
-                <button class="nav-btn" data-tab="platos">Platos</button>
-                <button class="nav-btn" data-tab="calificar">Calificar</button>
-                <button class="nav-btn" data-tab="resultados">Resultados</button>
+                <!-- Menú dinámico según rol -->
             </nav>
         </header>
 
@@ -41,7 +37,7 @@
                         <button type="submit" class="btn-primary">Acceder al Sistema</button>
                     </form>
                     <div class="login-footer">
-                        <p>¿No posee un código? <a href="#" onclick="mostrarPanel('registro')">Solicitar registro</a></p>
+                        <p>¿No posee un código? Solicítelo al administrador del concurso.</p>
                     </div>
                     <div id="login-error" class="error-message"></div>
                 </div>
@@ -55,13 +51,14 @@
                             <p><strong>Rol:</strong> <span id="sesion-tipo"></span></p>
                             <p><strong>Código:</strong> <span id="sesion-codigo"></span></p>
                         </div>
-                        <button onclick="cerrarSesion()" class="btn-danger">Cerrar Sesión</button>
+                        <button id="btn-cerrar-sesion" class="btn-danger">Cerrar Sesión</button>
                     </div>
                 </div>
             </section>
 
-            <!-- Panel de Registro -->
+            <!-- Panel de Registro (SOLO ADMIN) -->
             <section id="panel-registro" class="panel">
+                <div class="admin-banner">🔒 Panel de Administración</div>
                 <h2>Registro de Participantes</h2>
                 <form id="form-registro">
                     <div class="form-group">
@@ -80,8 +77,9 @@
                 <div id="lista-participantes"></div>
             </section>
 
-            <!-- Panel de Platos -->
+            <!-- Panel de Platos (SOLO ADMIN) -->
             <section id="panel-platos" class="panel">
+                <div class="admin-banner">🔒 Panel de Administración</div>
                 <h2>Gestión de Platos</h2>
                 <form id="form-plato">
                     <div class="form-group">
@@ -121,7 +119,7 @@
         </main>
         
         <footer>
-            <p>© 2025 Concurso Gastronómico FALOPAS</p>
+            <p>© 2024 FALOPAS - Concurso Gastronómico Familiar</p>
         </footer>
     </div>
 
