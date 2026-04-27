@@ -1,6 +1,6 @@
 // ============ CONFIGURACIÓN ============
 const CODIGO_ADMIN = '123456';
-const API_URL = 'https://script.google.com/macros/s/AKfycbxQsjLPy5cDEdHgkHpNJAsrxhD_pxsOUFw2KDuSGF2d6bUkkKGIsRIU8uA8ldWFm8w/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbynH_bHJivHbWZeVusGupXUm6DWbWnewPOoD1KqC4xdfKaqYijcGnYojzQwEervVpHI/exec';
 const USAR_API = true; // CAMBIÁ A true CUANDO GOOGLE SHEETS FUNCIONE
 
 let concursoFinalizado = false;
