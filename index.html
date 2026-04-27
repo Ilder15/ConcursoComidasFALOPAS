@@ -131,11 +131,26 @@
             </section>
 
             <!-- Panel de Resultados -->
-            <section id="panel-resultados" class="panel">
-                <h2>Resultados del Concurso</h2>
-                <button id="btn-actualizar-resultados" class="btn-secondary">Actualizar Resultados</button>
-                <div id="tabla-resultados"></div>
-            </section>
+<section id="panel-resultados" class="panel">
+    <h2>Resultados del Concurso</h2>
+    
+    <!-- Botones de control -->
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
+        <button id="btn-actualizar-resultados" class="btn-secondary" style="flex:1;">Actualizar Resultados 🔄</button>
+        <button id="btn-finalizar" class="btn-finalizar" style="flex:1;">🏆 Finalizar Concurso</button>
+    </div>
+    
+    <!-- Banner de concurso finalizado -->
+    <div id="banner-finalizado" style="display:none; background: linear-gradient(135deg, #c9a96e, #b8944f); color: #1a1a2e; text-align: center; padding: 1rem; border-radius: 10px; margin-bottom: 1rem; font-weight: 700; font-size: 1.1rem; animation: pulse 2s infinite;">
+        🏆 CONCURSO FINALIZADO - RESULTADOS OFICIALES 🏆
+    </div>
+    
+    <!-- Podio visual -->
+    <div id="podio-final" style="display:none;"></div>
+    
+    <!-- Tabla de resultados -->
+    <div id="tabla-resultados"></div>
+</section>
         </main>
         
         <footer>
