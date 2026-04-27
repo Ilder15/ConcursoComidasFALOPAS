@@ -569,29 +569,57 @@ function renderizarResultados() {
     }
     
     const ranking = appData.platos.map(p => {
+        const cocinero = obtenerParticipante(p.cocinero_id);
+        
+        // TOTAL DE JURADOS POSIBLES: todos los participantes menos el dueño del plato
+        const totalJuradosPosibles = appData.participantes.filter(
+            part => part.id !== p.cocinero_id
+        ).length;
+        
+        // Si no hay jurados posibles, no se puede evaluar
+        if (totalJuradosPosibles === 0) {
+            return {
+                ...p,
+                cocinero: cocinero,
+                promedio: 0,
+                totalVotos: 0,
+                totalJurados: 0,
+                detalleCategorias: {}
+            };
+        }
+        
         const cals = appData.calificaciones.filter(cal => cal.plato_id === p.id);
-        let sumaTotal = 0;
-        let cantidadCategorias = 0;
+        
         let detalleCategorias = {};
+        let sumaTotalCategorias = 0;
+        let cantidadCategorias = 0;
         
         appData.categorias.forEach(cat => {
+            // Sumar todas las puntuaciones de esta categoría
             const puntuacionesCat = cals
                 .filter(cal => cal.puntuaciones && cal.puntuaciones[cat] && cal.puntuaciones[cat] > 0)
                 .map(cal => cal.puntuaciones[cat]);
             
-            if (puntuacionesCat.length > 0) {
-                const promCat = puntuacionesCat.reduce((s, v) => s + v, 0) / puntuacionesCat.length;
-                sumaTotal += promCat;
-                cantidadCategorias++;
-                detalleCategorias[cat] = Math.round(promCat * 10) / 10;
-            }
+            // Suma total de puntos en esta categoría
+            const sumaPuntosCat = puntuacionesCat.reduce((s, v) => s + v, 0);
+            
+            // DIVIDIR ENTRE EL TOTAL DE JURADOS POSIBLES (no solo los que votaron)
+            const promCat = totalJuradosPosibles > 0 ? sumaPuntosCat / totalJuradosPosibles : 0;
+            
+            detalleCategorias[cat] = Math.round(promCat * 10) / 10;
+            sumaTotalCategorias += promCat;
+            cantidadCategorias++;
         });
+        
+        // Promedio general: promedio de todas las categorías
+        const promedioGeneral = cantidadCategorias > 0 ? sumaTotalCategorias / cantidadCategorias : 0;
         
         return {
             ...p,
-            cocinero: obtenerParticipante(p.cocinero_id),
-            promedio: cantidadCategorias > 0 ? Math.round((sumaTotal / cantidadCategorias) * 10) / 10 : 0,
+            cocinero: cocinero,
+            promedio: Math.round(promedioGeneral * 10) / 10,
             totalVotos: cals.length,
+            totalJurados: totalJuradosPosibles,
             detalleCategorias
         };
     }).sort((a, b) => b.promedio - a.promedio);
@@ -605,10 +633,21 @@ function renderizarResultados() {
             detalleHTML += '<span>📌 ' + cat + ': <strong>' + punt.toFixed(1) + '</strong></span>';
         }
         
-        return '<div class="ranking-item ' + clase + '"><div class="rank-pos">' + (medalla || '#' + (i+1)) + '</div><div class="rank-info"><strong>' + item.nombre + '</strong><div>por ' + (item.cocinero ? item.cocinero.nombre : '?') + '</div><div>' + item.totalVotos + ' voto' + (item.totalVotos !== 1 ? 's' : '') + '</div><div class="rank-detalle">' + detalleHTML + '</div></div><div class="rank-puntos">' + item.promedio.toFixed(1) + '</div></div>';
+        // Mostrar cuántos votaron del total
+        const infoVotos = item.totalVotos + '/' + item.totalJurados + ' jurados';
+        
+        return '<div class="ranking-item ' + clase + '">' +
+            '<div class="rank-pos">' + (medalla || '#' + (i+1)) + '</div>' +
+            '<div class="rank-info">' +
+                '<strong>' + item.nombre + '</strong>' +
+                '<div>por ' + (item.cocinero ? item.cocinero.nombre : '?') + '</div>' +
+                '<div style="font-size:0.8rem;">' + infoVotos + '</div>' +
+                '<div class="rank-detalle">' + detalleHTML + '</div>' +
+            '</div>' +
+            '<div class="rank-puntos">' + item.promedio.toFixed(1) + '</div>' +
+        '</div>';
     }).join('');
 }
-
 // ============ GLOBALES ============
 window.eliminarParticipante = eliminarParticipante;
 window.eliminarPlato = eliminarPlato;
