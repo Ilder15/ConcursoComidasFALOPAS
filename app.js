@@ -6,6 +6,7 @@ const STORAGE_KEY = 'concurso_falopas_data';
 const SESSION_KEY = 'concurso_falopas_session';
 const THEME_KEY = 'concurso_falopas_theme';
 const FINALIZADO_KEY = 'concurso_falopas_finalizado'; // AGREGAR ESTA LÍNEA
+const API_URL = 'https://script.google.com/macros/s/AKfycbxQsjLPy5cDEdHgkHpNJAsrxhD_pxsOUFw2KDuSGF2d6bUkkKGIsRIU8uA8ldWFm8w/exec';
 
 const CATEGORIAS_DEFAULT = ['Presentación', 'Sabor', 'Originalidad', 'Bebida'];
 
