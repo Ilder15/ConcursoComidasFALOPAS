@@ -175,42 +175,77 @@ function construirMenu() {
 }
 
 // ============ EVENTOS ============
+// ============ CONFIGURAR EVENTOS ============
 function configurarEventos() {
     document.getElementById('btn-theme').addEventListener('click', toggleTheme);
     
-    document.getElementById('form-login').addEventListener('submit', e => {
-        e.preventDefault(); hacerLogin();
-    });
-    
-    document.getElementById('form-registro').addEventListener('submit', async e => {
+    document.getElementById('form-login').addEventListener('submit', function(e) {
         e.preventDefault();
-        if (!sesionActual?.esAdmin) return;
-        if (USAR_API) await registrarParticipanteAPI();
-        else registrarParticipanteLocal();
+        hacerLogin();
     });
     
-    document.getElementById('form-categoria').addEventListener('submit', async e => {
+    document.getElementById('form-registro').addEventListener('submit', async function(e) {
         e.preventDefault();
-        if (!sesionActual?.esAdmin) return;
-        if (USAR_API) await agregarCategoriaAPI();
-        else agregarCategoriaLocal();
+        if (!sesionActual || !sesionActual.esAdmin) return;
+        if (USAR_API) {
+            await registrarParticipanteAPI();
+        } else {
+            registrarParticipanteLocal();
+        }
     });
     
-    document.getElementById('form-plato').addEventListener('submit', async e => {
+    document.getElementById('form-categoria').addEventListener('submit', async function(e) {
         e.preventDefault();
-        if (USAR_API) await registrarPlatoAPI();
-        else registrarPlatoLocal();
+        if (!sesionActual || !sesionActual.esAdmin) return;
+        if (USAR_API) {
+            await agregarCategoriaAPI();
+        } else {
+            agregarCategoriaLocal();
+        }
     });
     
-    document.getElementById('btn-cerrar-sesion')?.addEventListener('click', cerrarSesion);
+    document.getElementById('form-plato').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        if (USAR_API) {
+            await registrarPlatoAPI();
+        } else {
+            registrarPlatoLocal();
+        }
+    });
     
-    document.getElementById('btn-actualizar-resultados')?.addEventListener('click', renderizarResultados);
+    const btnCerrar = document.getElementById('btn-cerrar-sesion');
+    if (btnCerrar) {
+        btnCerrar.addEventListener('click', cerrarSesion);
+    }
+    
+    const btnActualizar = document.getElementById('btn-actualizar-resultados');
+    if (btnActualizar) {
+        btnActualizar.addEventListener('click', async function() {
+            if (USAR_API) {
+                await cargarDatosAPI();
+            } else {
+                cargarDatosLocal();
+            }
+            renderizarResultados();
+        });
+    }
     
     const btnFinalizar = document.getElementById('btn-finalizar');
     if (btnFinalizar) {
-        btnFinalizar.addEventListener('click', () => {
-            if (concursoFinalizado) reabrirConcurso();
-            else finalizarConcurso();
+        btnFinalizar.addEventListener('click', async function() {
+            if (concursoFinalizado) {
+                if (USAR_API) {
+                    await reabrirConcursoAPI();
+                } else {
+                    reabrirConcurso();
+                }
+            } else {
+                if (USAR_API) {
+                    await finalizarConcursoAPI();
+                } else {
+                    finalizarConcurso();
+                }
+            }
         });
     }
 }
@@ -622,10 +657,118 @@ function renderizarResultados() {
     }).join('');
 }
 
+// ============ API GOOGLE SHEETS ============
+async function registrarParticipanteAPI() {
+    const nombre = document.getElementById('nombre-participante').value.trim();
+    const tipo = document.getElementById('tipo-participante').value;
+    if (!nombre) return;
+    
+    const id = generarId();
+    const result = await apiCall('addParticipante', { id, nombre, tipo });
+    
+    if (result.error) {
+        alert('Error: ' + result.error);
+        return;
+    }
+    
+    await cargarDatosAPI();
+    
+    if (result.codigo) {
+        alert('✅ Registrado\n\n👤 ' + nombre + '\n🔑 Código: ' + result.codigo);
+    }
+    
+    document.getElementById('form-registro').reset();
+    renderizarParticipantes();
+}
+
+async function agregarCategoriaAPI() {
+    const input = document.getElementById('nombre-categoria');
+    const nombre = input.value.trim();
+    if (!nombre) return;
+    
+    const result = await apiCall('addCategoria', { nombre });
+    if (result.error) { alert('Error: ' + result.error); return; }
+    
+    await cargarDatosAPI();
+    input.value = '';
+    renderizarCategorias();
+}
+
+async function registrarPlatoAPI() {
+    let cocinero_id;
+    if (sesionActual?.esAdmin) {
+        cocinero_id = document.getElementById('cocinero-select').value;
+    } else if (sesionActual?.tipo === 'cocinero') {
+        cocinero_id = sesionActual.id;
+    } else { alert('Sin permisos.'); return; }
+    
+    const nombre = document.getElementById('nombre-plato').value.trim();
+    const descripcion = document.getElementById('descripcion-plato').value.trim();
+    if (!cocinero_id || !nombre) { alert('Complete los datos.'); return; }
+    
+    const id = generarId();
+    await apiCall('addPlato', { id, nombre, descripcion, cocinero_id });
+    await cargarDatosAPI();
+    document.getElementById('form-plato').reset();
+    prepararPanelPlatos();
+    alert('✅ Plato registrado.');
+}
+
+async function eliminarCategoriaAPI(nombre) {
+    if (!confirm('¿Eliminar "' + nombre + '"?')) return;
+    await apiCall('deleteCategoria', { nombre });
+    await cargarDatosAPI();
+    renderizarCategorias();
+}
+
+async function eliminarParticipanteAPI(id) {
+    if (!confirm('¿Eliminar?')) return;
+    await apiCall('deleteParticipante', { id });
+    await cargarDatosAPI();
+    renderizarParticipantes();
+}
+
+async function eliminarPlatoAPI(id) {
+    if (!confirm('¿Eliminar?')) return;
+    await apiCall('deletePlato', { id });
+    await cargarDatosAPI();
+    prepararPanelPlatos();
+}
+
+async function finalizarConcursoAPI() {
+    if (!sesionActual?.esAdmin) return;
+    if (!confirm('⚠️ ¿Finalizar?')) return;
+    await apiCall('finalizarConcurso');
+    concursoFinalizado = true;
+    await cargarDatosAPI();
+    actualizarBannerFinalizado();
+    lanzarConfetti();
+    renderizarResultados();
+    alert('🏆 Finalizado!');
+}
+
+async function reabrirConcursoAPI() {
+    if (!sesionActual?.esAdmin) return;
+    if (!confirm('¿Reabrir?')) return;
+    await apiCall('reabrirConcurso');
+    concursoFinalizado = false;
+    await cargarDatosAPI();
+    actualizarBannerFinalizado();
+    renderizarResultados();
+    alert('✅ Reabierto');
+}
+
 // ============ GLOBALES ============
 window.eliminarParticipante = eliminarParticipante;
 window.eliminarPlato = eliminarPlato;
 window.eliminarCategoria = eliminarCategoria;
+window.seleccionarEstrella = seleccionarEstrella;
+window.enviarCal = enviarCal;
+window.cambiarCalificacion = cambiarCalificacion;
+// ============ EXPORTAR FUNCIONES GLOBALES ============
+window.eliminarParticipante = USAR_API ? eliminarParticipanteAPI : eliminarParticipante;
+window.eliminarPlato = USAR_API ? eliminarPlatoAPI : eliminarPlato;
+window.eliminarCategoria = USAR_API ? eliminarCategoriaAPI : eliminarCategoria;
 window.seleccionarEstrella = seleccionarEstrella;
 window.enviarCal = enviarCal;
 window.cambiarCalificacion = cambiarCalificacion;
