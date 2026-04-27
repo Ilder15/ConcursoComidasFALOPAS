@@ -1,5 +1,7 @@
 // ============ ESTADO DE LA APLICACIÓN ============
 const STORAGE_KEY = 'concurso_comida_data';
+const SESSION_KEY = 'concurso_sesion_actual';
+const THEME_KEY = 'concurso_theme';
 
 let appData = {
     participantes: [],
@@ -7,17 +9,67 @@ let appData = {
     calificaciones: []
 };
 
+let sesionActual = null;
+
 // Cargar datos del localStorage
 function cargarDatos() {
     const datos = localStorage.getItem(STORAGE_KEY);
     if (datos) {
         appData = JSON.parse(datos);
     }
+    
+    const sesion = localStorage.getItem(SESSION_KEY);
+    if (sesion) {
+        sesionActual = JSON.parse(sesion);
+    }
 }
 
 // Guardar datos en localStorage
 function guardarDatos() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+}
+
+function guardarSesion() {
+    if (sesionActual) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(sesionActual));
+    } else {
+        localStorage.removeItem(SESSION_KEY);
+    }
+}
+
+// ============ MODO OSCURO ============
+function cargarTema() {
+    const temaGuardado = localStorage.getItem(THEME_KEY);
+    if (temaGuardado) {
+        document.documentElement.setAttribute('data-theme', temaGuardado);
+        actualizarBotonTema(temaGuardado);
+    }
+}
+
+function toggleTheme() {
+    const temaActual = document.documentElement.getAttribute('data-theme');
+    const nuevoTema = temaActual === 'dark' ? 'light' : 'dark';
+    
+    document.documentElement.setAttribute('data-theme', nuevoTema);
+    localStorage.setItem(THEME_KEY, nuevoTema);
+    actualizarBotonTema(nuevoTema);
+}
+
+function actualizarBotonTema(tema) {
+    const icon = document.querySelector('.theme-icon');
+    const text = document.querySelector('.theme-text');
+    
+    if (tema === 'dark') {
+        icon.textContent = '☀️';
+        text.textContent = 'Modo Claro';
+        document.getElementById('btn-theme').style.background = '#4ecdc4';
+        document.getElementById('btn-theme').style.color = '#1a1a2e';
+    } else {
+        icon.textContent = '🌙';
+        text.textContent = 'Modo Oscuro';
+        document.getElementById('btn-theme').style.background = '#2c3e50';
+        document.getElementById('btn-theme').style.color = '#ffffff';
+    }
 }
 
 // ============ UTILIDADES ============
@@ -33,26 +85,66 @@ function obtenerPlato(id) {
     return appData.platos.find(p => p.id === id);
 }
 
+// Generar código único de 6 dígitos
+function generarCodigoUnico() {
+    let codigo;
+    do {
+        codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    } while (appData.participantes.some(p => p.codigo === codigo));
+    return codigo;
+}
+
 // ============ NAVEGACIÓN POR PESTAÑAS ============
+function mostrarPanel(nombrePanel) {
+    // Actualizar tabs
+    document.querySelectorAll('.tab').forEach(t => {
+        t.classList.remove('active');
+        if (t.dataset.tab === nombrePanel) {
+            t.classList.add('active');
+        }
+    });
+    
+    // Actualizar paneles
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    
+    let panelId;
+    switch(nombrePanel) {
+        case 'login': panelId = 'panel-login'; break;
+        case 'registro': panelId = 'panel-registro'; break;
+        case 'platos': panelId = 'panel-platos'; break;
+        case 'calificar': panelId = 'panel-calificar'; break;
+        case 'resultados': panelId = 'panel-resultados'; break;
+        default: panelId = 'panel-login';
+    }
+    
+    const panel = document.getElementById(panelId);
+    if (panel) {
+        panel.classList.add('active');
+    }
+    
+    actualizarContenidoPanel(nombrePanel);
+}
+
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
         const target = tab.dataset.tab;
         
-        // Cambiar tabs activos
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
+        // Verificar si requiere sesión
+        if ((target === 'calificar' || target === 'resultados') && !sesionActual) {
+            alert('⚠️ Debes iniciar sesión con tu código primero');
+            mostrarPanel('login');
+            return;
+        }
         
-        // Cambiar paneles
-        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-        document.getElementById(`panel-${target}`).classList.add('active');
-        
-        // Actualizar paneles
-        actualizarPanel(target);
+        mostrarPanel(target);
     });
 });
 
-function actualizarPanel(panel) {
+function actualizarContenidoPanel(panel) {
     switch(panel) {
+        case 'login':
+            actualizarUISesion();
+            break;
         case 'registro':
             renderizarParticipantes();
             break;
@@ -61,11 +153,97 @@ function actualizarPanel(panel) {
             renderizarPlatos();
             break;
         case 'calificar':
-            renderizarSelectJueces();
+            if (sesionActual) {
+                document.getElementById('info-juez').innerHTML = 
+                    `👤 Calificando como: <strong>${sesionActual.nombre}</strong> (${sesionActual.tipo})`;
+                document.getElementById('info-juez').style.display = 'block';
+                renderizarPlatosParaCalificar(sesionActual.id);
+            }
             break;
         case 'resultados':
             renderizarResultados();
             break;
+    }
+}
+
+// ============ SISTEMA DE LOGIN ============
+document.getElementById('form-login').addEventListener('submit', (e) => {
+    e.preventDefault();
+    
+    const codigo = document.getElementById('codigo-input').value.trim();
+    const errorDiv = document.getElementById('login-error');
+    
+    if (!codigo || codigo.length !== 6) {
+        errorDiv.textContent = '⚠️ Ingresa un código válido de 6 dígitos';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    const participante = appData.participantes.find(p => p.codigo === codigo);
+    
+    if (!participante) {
+        errorDiv.textContent = '❌ Código no encontrado. Verifica e intenta de nuevo.';
+        errorDiv.style.display = 'block';
+        document.getElementById('codigo-input').value = '';
+        return;
+    }
+    
+    // Login exitoso
+    sesionActual = {
+        id: participante.id,
+        nombre: participante.nombre,
+        tipo: participante.tipo,
+        codigo: participante.codigo
+    };
+    
+    guardarSesion();
+    actualizarUISesion();
+    
+    document.getElementById('codigo-input').value = '';
+    errorDiv.style.display = 'none';
+    
+    // Mostrar mensaje de bienvenida e ir a calificar
+    alert(`✅ ¡Bienvenido/a ${sesionActual.nombre}!`);
+    mostrarPanel('calificar');
+});
+
+function cerrarSesion() {
+    if (confirm('¿Estás seguro de cerrar sesión?')) {
+        sesionActual = null;
+        guardarSesion();
+        actualizarUISesion();
+        mostrarPanel('login');
+    }
+}
+
+function actualizarUISesion() {
+    const loginForm = document.getElementById('login-form');
+    const sesionActivaDiv = document.getElementById('sesion-activa');
+    
+    if (sesionActual) {
+        if (loginForm) loginForm.style.display = 'none';
+        if (sesionActivaDiv) {
+            sesionActivaDiv.style.display = 'block';
+            document.getElementById('sesion-nombre').textContent = sesionActual.nombre;
+            document.getElementById('sesion-tipo').textContent = 
+                sesionActual.tipo === 'cocinero' ? '👨‍🍳 Cocinero/a' : '🍴 Invitado/a';
+            document.getElementById('sesion-codigo').textContent = sesionActual.codigo;
+        }
+        
+        // Mostrar todos los tabs
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.style.display = '';
+        });
+    } else {
+        if (loginForm) loginForm.style.display = 'block';
+        if (sesionActivaDiv) sesionActivaDiv.style.display = 'none';
+        
+        // Ocultar tabs que requieren sesión
+        document.querySelectorAll('.tab').forEach(tab => {
+            if (tab.dataset.tab === 'calificar' || tab.dataset.tab === 'resultados') {
+                tab.style.display = 'none';
+            }
+        });
     }
 }
 
@@ -78,14 +256,20 @@ document.getElementById('form-registro').addEventListener('submit', (e) => {
     
     if (!nombre) return;
     
+    const codigo = generarCodigoUnico();
+    
     const participante = {
         id: generarId(),
         nombre,
-        tipo
+        tipo,
+        codigo
     };
     
     appData.participantes.push(participante);
     guardarDatos();
+    
+    // Mostrar el código generado
+    alert(`✅ ¡Registro exitoso!\n\n👤 Participante: ${nombre}\n🔑 Tu código de acceso es: ${codigo}\n\n⚠️ GUARDA ESTE CÓDIGO - Lo necesitarás para calificar platos.`);
     
     document.getElementById('form-registro').reset();
     renderizarParticipantes();
@@ -95,17 +279,18 @@ function renderizarParticipantes() {
     const contenedor = document.getElementById('lista-participantes');
     
     if (appData.participantes.length === 0) {
-        contenedor.innerHTML = '<p>No hay participantes registrados aún.</p>';
+        contenedor.innerHTML = '<p class="mensaje-vacio">No hay participantes registrados aún.</p>';
         return;
     }
     
-    contenedor.innerHTML = appData.participantes.map(p => `
+    contenedor.innerHTML = '<h3>Participantes registrados:</h3>' + 
+        appData.participantes.map(p => `
         <div class="card">
             <div class="card-header">
                 <strong>${p.nombre}</strong>
                 <span class="badge badge-${p.tipo}">${p.tipo === 'cocinero' ? '👨‍🍳 Cocinero' : '🍴 Invitado'}</span>
             </div>
-            <small>ID: ${p.id.slice(0, 8)}</small>
+            <p><strong>Código:</strong> ${p.codigo}</p>
             <button class="eliminar-btn" onclick="eliminarParticipante('${p.id}')">Eliminar</button>
         </div>
     `).join('');
@@ -116,7 +301,9 @@ function eliminarParticipante(id) {
     
     appData.participantes = appData.participantes.filter(p => p.id !== id);
     appData.platos = appData.platos.filter(p => p.cocinero_id !== id);
-    appData.calificaciones = appData.calificaciones.filter(c => c.juez_id !== id);
+    appData.calificaciones = appData.calificaciones.filter(
+        c => c.juez_id !== id && !appData.platos.find(p => p.id === c.plato_id && p.cocinero_id === id)
+    );
     guardarDatos();
     renderizarParticipantes();
 }
@@ -127,7 +314,7 @@ function renderizarSelectCocineros() {
     const cocineros = appData.participantes.filter(p => p.tipo === 'cocinero');
     
     select.innerHTML = '<option value="">Selecciona al cocinero...</option>' +
-        cocineros.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+        cocineros.map(c => `<option value="${c.id}">${c.nombre} (Código: ${c.codigo})</option>`).join('');
 }
 
 document.getElementById('form-plato').addEventListener('submit', (e) => {
@@ -151,13 +338,14 @@ document.getElementById('form-plato').addEventListener('submit', (e) => {
     
     document.getElementById('form-plato').reset();
     renderizarPlatos();
+    alert('✅ Plato agregado correctamente');
 });
 
 function renderizarPlatos() {
     const contenedor = document.getElementById('lista-platos');
     
     if (appData.platos.length === 0) {
-        contenedor.innerHTML = '<p>No hay platos registrados aún.</p>';
+        contenedor.innerHTML = '<p class="mensaje-vacio">No hay platos registrados aún.</p>';
         return;
     }
     
@@ -187,34 +375,19 @@ function eliminarPlato(id) {
 }
 
 // ============ CALIFICACIONES ============
-function renderizarSelectJueces() {
-    const select = document.getElementById('juez-select');
-    
-    select.innerHTML = '<option value="">¿Quién eres?</option>' +
-        appData.participantes.map(p => `<option value="${p.id}">${p.nombre} (${p.tipo})</option>`).join('');
-    
-    document.getElementById('platos-a-calificar').innerHTML = 
-        '<p>Selecciona un juez para ver los platos disponibles</p>';
-}
-
-document.getElementById('juez-select').addEventListener('change', (e) => {
-    const juezId = e.target.value;
-    if (!juezId) {
-        document.getElementById('platos-a-calificar').innerHTML = 
-            '<p>Selecciona un juez para ver los platos disponibles</p>';
-        return;
-    }
-    
-    renderizarPlatosParaCalificar(juezId);
-});
-
 function renderizarPlatosParaCalificar(juezId) {
     const contenedor = document.getElementById('platos-a-calificar');
     
+    if (!juezId) {
+        contenedor.innerHTML = '<p class="mensaje-vacio">Inicia sesión para calificar platos.</p>';
+        return;
+    }
+    
+    // Filtrar platos donde el juez NO es el cocinero
     const platosDisponibles = appData.platos.filter(p => p.cocinero_id !== juezId);
     
     if (platosDisponibles.length === 0) {
-        contenedor.innerHTML = '<p>No hay platos para calificar (eres el cocinero de todos los platos).</p>';
+        contenedor.innerHTML = '<p class="mensaje-vacio">No hay platos para calificar (eres el cocinero de todos los platos registrados).</p>';
         return;
     }
     
@@ -227,14 +400,15 @@ function renderizarPlatosParaCalificar(juezId) {
         
         return `
             <div class="voto-card">
-                <div>
+                <div style="flex: 1;">
                     <strong>${plato.nombre}</strong>
                     <small>(de ${cocinero ? cocinero.nombre : '?'})</small>
                     ${plato.descripcion ? `<br><small>${plato.descripcion}</small>` : ''}
                 </div>
                 ${yaCalificado ? 
-                    `<div>
+                    `<div style="text-align: right;">
                         <span class="badge">Ya calificado: ${'⭐'.repeat(yaCalificado.puntuacion)}</span>
+                        <br>
                         <button class="eliminar-btn" onclick="eliminarCalificacion('${yaCalificado.id}', '${juezId}')">Cambiar</button>
                     </div>` :
                     `<div class="calificacion-form" data-plato="${plato.id}" data-juez="${juezId}">
@@ -243,7 +417,7 @@ function renderizarPlatosParaCalificar(juezId) {
                                 `<span onclick="calificar('${plato.id}', '${juezId}', ${num})" title="${num} estrella${num > 1 ? 's' : ''}">⭐</span>`
                             ).join('')}
                         </div>
-                        <input type="text" placeholder="Comentario (opcional)" class="comentario-input" style="margin-top: 0.5rem;">
+                        <input type="text" placeholder="Comentario (opcional)" class="comentario-input" style="margin-top: 0.5rem; width: 100%;">
                     </div>`
                 }
             </div>
@@ -252,25 +426,21 @@ function renderizarPlatosParaCalificar(juezId) {
 }
 
 function calificar(platoId, juezId, puntuacion) {
-    // Verificar que no sea el cocinero calificando su propio plato
     const plato = obtenerPlato(platoId);
     if (plato.cocinero_id === juezId) {
         alert('¡No puedes calificar tu propio plato!');
         return;
     }
     
-    // Validar que la puntuación esté entre 1 y 5
     if (puntuacion < 1 || puntuacion > 5) {
         alert('La puntuación debe ser entre 1 y 5 estrellas');
         return;
     }
     
-    // Obtener el comentario
     const formDiv = document.querySelector(`[data-plato="${platoId}"]`);
     const comentarioInput = formDiv ? formDiv.querySelector('.comentario-input') : null;
     const comentario = comentarioInput ? comentarioInput.value.trim() : '';
     
-    // Verificar si ya existe una calificación
     const existente = appData.calificaciones.findIndex(
         c => c.plato_id === platoId && c.juez_id === juezId
     );
@@ -290,17 +460,6 @@ function calificar(platoId, juezId, puntuacion) {
     
     guardarDatos();
     renderizarPlatosParaCalificar(juezId);
-    
-    // Pequeña animación de confirmación
-    const estrellas = document.querySelectorAll(`[data-plato="${platoId}"] .stars span`);
-    estrellas.forEach((estrella, index) => {
-        if (index < puntuacion) {
-            estrella.style.transform = 'scale(1.3)';
-            setTimeout(() => {
-                estrella.style.transform = 'scale(1)';
-            }, 200);
-        }
-    });
 }
 
 function eliminarCalificacion(calificacionId, juezId) {
@@ -314,11 +473,10 @@ function renderizarResultados() {
     const contenedor = document.getElementById('tabla-resultados');
     
     if (appData.platos.length === 0) {
-        contenedor.innerHTML = '<p>No hay platos para mostrar resultados.</p>';
+        contenedor.innerHTML = '<p class="mensaje-vacio">No hay platos para mostrar resultados.</p>';
         return;
     }
     
-    // Calcular promedios
     const ranking = appData.platos.map(plato => {
         const calificaciones = appData.calificaciones.filter(c => c.plato_id === plato.id);
         const promedio = calificaciones.length > 0 
@@ -336,7 +494,6 @@ function renderizarResultados() {
         };
     });
     
-    // Ordenar por promedio descendente
     ranking.sort((a, b) => b.promedio - a.promedio);
     
     contenedor.innerHTML = ranking.map((item, index) => {
@@ -353,7 +510,7 @@ function renderizarResultados() {
                         `<div style="font-size: 0.85rem; margin-top: 0.3rem;">
                             ${item.calificaciones.map(c => {
                                 const juez = obtenerParticipante(c.juez_id);
-                                return `${juez ? juez.nombre : '?'}: ${c.puntuacion} ${c.comentario ? `"${c.comentario}"` : ''}`;
+                                return `${juez ? juez.nombre : '?'}: ${c.puntuacion}/5 ${c.comentario ? `"${c.comentario}"` : ''}`;
                             }).join(' | ')}
                         </div>` : 
                         '<div style="font-size: 0.85rem;">Sin calificaciones aún</div>'
@@ -371,4 +528,13 @@ document.getElementById('btn-actualizar-resultados').addEventListener('click', (
 
 // ============ INICIALIZACIÓN ============
 cargarDatos();
-renderizarParticipantes();
+cargarTema();
+
+// Mostrar panel inicial según sesión
+if (sesionActual) {
+    actualizarUISesion();
+    mostrarPanel('calificar');
+} else {
+    actualizarUISesion();
+    mostrarPanel('login');
+}
