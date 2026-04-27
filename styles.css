@@ -533,3 +533,22 @@ footer {
     .nav-btn { font-size: 0.65rem; letter-spacing: 0; }
     .panel { padding: 1rem; }
 }
+
+/* ============ BANNER ADMIN ============ */
+.admin-banner {
+    background: #1a1a2e;
+    color: var(--accent);
+    text-align: center;
+    padding: 0.5rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+/* ============ NAV OCULTO ============ */
+.nav-btn.hidden {
+    display: none !important;
+}
