@@ -1,5 +1,5 @@
 // ============ CONFIGURACIÓN ============
-const CODIGO_ADMIN = '123456';
+const CODIGO_ADMIN = '595914';
 const API_URL = 'https://script.google.com/macros/s/AKfycbynH_bHJivHbWZeVusGupXUm6DWbWnewPOoD1KqC4xdfKaqYijcGnYojzQwEervVpHI/exec';
 const USAR_API = true; // true = Google Sheets, false = localStorage
 
