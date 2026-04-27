@@ -46,12 +46,16 @@ document.addEventListener('DOMContentLoaded', async function() {
 // ============ API GOOGLE SHEETS ============
 async function apiCall(action, data = {}) {
     try {
-        const params = new URLSearchParams({ action, data: JSON.stringify(data) });
-        const response = await fetch(API_URL + '?' + params.toString());
+        const url = API_URL + '?action=' + action + '&data=' + encodeURIComponent(JSON.stringify(data));
+        const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            redirect: 'follow'
+        });
         return await response.json();
     } catch(e) {
         console.error('Error API:', e);
-        return { error: 'Error de conexión' };
+        return { error: 'Error de conexión: ' + e.message };
     }
 }
 
