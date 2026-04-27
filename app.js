@@ -1,7 +1,7 @@
 // ============ CONFIGURACIÓN ============
 const CODIGO_ADMIN = '123456';
-const API_URL = 'https://script.google.com/macros/s/AKfcybXQp1L9y5cDEdtgkpH3ArshvD_pxsOUfw2KDu5GF2d6bJkkKGIsRlU8uA81dlwFm8w/exec';
-const USAR_API = false; // CAMBIÁ A true CUANDO GOOGLE SHEETS FUNCIONE
+const API_URL = 'https://script.google.com/macros/s/AKfycbxQsjLPy5cDEdHgkHpNJAsrxhD_pxsOUFw2KDuSGF2d6bUkkKGIsRIU8uA8ldWFm8w/exec';
+const USAR_API = true; // CAMBIÁ A true CUANDO GOOGLE SHEETS FUNCIONE
 
 let concursoFinalizado = false;
 
