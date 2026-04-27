@@ -5,14 +5,13 @@ const STORAGE_KEY = 'concurso_falopas_data';
 const SESSION_KEY = 'concurso_falopas_session';
 const THEME_KEY = 'concurso_falopas_theme';
 
-// Categorías por defecto
 const CATEGORIAS_DEFAULT = ['Presentación', 'Sabor', 'Originalidad', 'Bebida'];
 
 let appData = {
     participantes: [],
     platos: [],
     categorias: [...CATEGORIAS_DEFAULT],
-    calificaciones: [] // { id, plato_id, juez_id, puntuaciones: { categoria: puntuacion }, comentario }
+    calificaciones: []
 };
 
 let sesionActual = null;
@@ -26,7 +25,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (sesionActual) {
         actualizarUISesion();
-        construirMenu();
         if (sesionActual.esAdmin) {
             mostrarPanel('categorias');
         } else {
@@ -34,7 +32,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     } else {
         actualizarUISesion();
-        construirMenu();
         mostrarPanel('login');
     }
 });
@@ -45,12 +42,10 @@ function cargarDatos() {
         const datos = localStorage.getItem(STORAGE_KEY);
         if (datos) {
             const parsed = JSON.parse(datos);
-            appData = {
-                participantes: parsed.participantes || [],
-                platos: parsed.platos || [],
-                categorias: parsed.categorias || [...CATEGORIAS_DEFAULT],
-                calificaciones: parsed.calificaciones || []
-            };
+            appData.participantes = parsed.participantes || [];
+            appData.platos = parsed.platos || [];
+            appData.categorias = parsed.categorias || [...CATEGORIAS_DEFAULT];
+            appData.calificaciones = parsed.calificaciones || [];
         }
     } catch(e) {}
     
@@ -99,25 +94,25 @@ function construirMenu() {
     
     if (sesionActual && sesionActual.esAdmin) {
         nav.innerHTML = `
-            <button class="nav-btn active" data-tab="categorias">📋 Categorías</button>
+            <button class="nav-btn" data-tab="categorias">📋 Categorías</button>
             <button class="nav-btn" data-tab="registro">👥 Participantes</button>
             <button class="nav-btn" data-tab="platos">🍽️ Platos</button>
             <button class="nav-btn" data-tab="calificar">⭐ Calificar</button>
             <button class="nav-btn" data-tab="resultados">🏆 Resultados</button>
-            <button class="nav-btn" data-tab="login" style="color:#ff6b6b;">🚪 Salir</button>
+            <button class="nav-btn" data-tab="logout">🚪 Salir</button>
         `;
     } else if (sesionActual && sesionActual.tipo === 'cocinero') {
         nav.innerHTML = `
-            <button class="nav-btn active" data-tab="calificar">⭐ Calificar</button>
+            <button class="nav-btn" data-tab="calificar">⭐ Calificar</button>
             <button class="nav-btn" data-tab="platos">🍽️ Mis Platos</button>
             <button class="nav-btn" data-tab="resultados">🏆 Resultados</button>
-            <button class="nav-btn" data-tab="login" style="color:#ff6b6b;">🚪 Salir</button>
+            <button class="nav-btn" data-tab="logout">🚪 Salir</button>
         `;
     } else if (sesionActual && sesionActual.tipo === 'invitado') {
         nav.innerHTML = `
-            <button class="nav-btn active" data-tab="calificar">⭐ Calificar</button>
+            <button class="nav-btn" data-tab="calificar">⭐ Calificar</button>
             <button class="nav-btn" data-tab="resultados">🏆 Resultados</button>
-            <button class="nav-btn" data-tab="login" style="color:#ff6b6b;">🚪 Salir</button>
+            <button class="nav-btn" data-tab="logout">🚪 Salir</button>
         `;
     } else {
         nav.innerHTML = `
@@ -129,7 +124,7 @@ function construirMenu() {
         btn.addEventListener('click', function() {
             const target = this.dataset.tab;
             
-            if (target === 'login' && sesionActual) {
+            if (target === 'logout') {
                 cerrarSesion();
                 return;
             }
@@ -175,8 +170,8 @@ function configurarEventos() {
         registrarPlato();
     });
     
-    document.getElementById('btn-cerrar-sesion').addEventListener('click', cerrarSesion);
-    document.getElementById('btn-actualizar-resultados').addEventListener('click', renderizarResultados);
+    document.getElementById('btn-cerrar-sesion')?.addEventListener('click', cerrarSesion);
+    document.getElementById('btn-actualizar-resultados')?.addEventListener('click', renderizarResultados);
 }
 
 // ============ UTILIDADES ============
@@ -215,19 +210,7 @@ function actualizarPanel(panel) {
         case 'login': actualizarUISesion(); break;
         case 'registro': renderizarParticipantes(); break;
         case 'categorias': renderizarCategorias(); break;
-       case 'platos': 
-    if (sesionActual && sesionActual.esAdmin) {
-        document.getElementById('platos-admin-banner').style.display = 'block';
-        document.getElementById('cocinero-group').style.display = 'block';
-        document.getElementById('cocinero-select').setAttribute('required', 'required');
-        renderizarCocineros();
-    } else if (sesionActual && sesionActual.tipo === 'cocinero') {
-        document.getElementById('platos-admin-banner').style.display = 'none';
-        document.getElementById('cocinero-group').style.display = 'none';
-        document.getElementById('cocinero-select').removeAttribute('required');
-    }
-    renderizarPlatos(); 
-    break;
+        case 'platos': prepararPanelPlatos(); break;
         case 'calificar':
             if (sesionActual) {
                 document.getElementById('info-juez').innerHTML = 'Evaluando como: <strong>' + sesionActual.nombre + '</strong>';
@@ -237,6 +220,34 @@ function actualizarPanel(panel) {
             break;
         case 'resultados': renderizarResultados(); break;
     }
+}
+
+// ============ PANEL PLATOS (CORREGIDO) ============
+function prepararPanelPlatos() {
+    const cocineroSelect = document.getElementById('cocinero-select');
+    const cocineroGroup = document.getElementById('cocinero-group');
+    const banner = document.getElementById('platos-admin-banner');
+    
+    if (sesionActual && sesionActual.esAdmin) {
+        // Admin: mostrar selector de cocinero
+        if (banner) banner.style.display = 'block';
+        if (cocineroGroup) cocineroGroup.style.display = 'block';
+        if (cocineroSelect) {
+            cocineroSelect.setAttribute('required', '');
+            cocineroSelect.style.display = '';
+        }
+        renderizarCocineros();
+    } else if (sesionActual && sesionActual.tipo === 'cocinero') {
+        // Cocinero: ocultar selector (registra sus propios platos)
+        if (banner) banner.style.display = 'none';
+        if (cocineroGroup) cocineroGroup.style.display = 'none';
+        if (cocineroSelect) {
+            cocineroSelect.removeAttribute('required');
+            cocineroSelect.style.display = 'none';
+        }
+    }
+    
+    renderizarPlatos();
 }
 
 // ============ LOGIN ============
@@ -296,23 +307,18 @@ function actualizarUISesion() {
             document.getElementById('sesion-tipo').textContent = sesionActual.esAdmin ? '👑 Administrador' : sesionActual.tipo === 'cocinero' ? '👨‍🍳 Cocinero/a' : '🍴 Invitado/a';
             document.getElementById('sesion-codigo').textContent = sesionActual.codigo;
         }
-       } else {
+    } else {
         if (loginForm) loginForm.style.display = 'block';
         if (sesionDiv) sesionDiv.style.display = 'none';
     }
 }
 
-// ============ CATEGORÍAS (SOLO ADMIN) ============
+// ============ CATEGORÍAS ============
 function agregarCategoria() {
     const input = document.getElementById('nombre-categoria');
     const nombre = input.value.trim();
-    
     if (!nombre) return;
-    
-    if (appData.categorias.includes(nombre)) {
-        alert('Esa categoría ya existe.');
-        return;
-    }
+    if (appData.categorias.includes(nombre)) { alert('Esa categoría ya existe.'); return; }
     
     appData.categorias.push(nombre);
     guardarDatos();
@@ -322,16 +328,10 @@ function agregarCategoria() {
 
 function eliminarCategoria(nombre) {
     if (!confirm('¿Eliminar la categoría "' + nombre + '"?')) return;
-    
     appData.categorias = appData.categorias.filter(c => c !== nombre);
-    
-    // Eliminar puntuaciones de esta categoría en todas las calificaciones
     appData.calificaciones.forEach(cal => {
-        if (cal.puntuaciones && cal.puntuaciones[nombre] !== undefined) {
-            delete cal.puntuaciones[nombre];
-        }
+        if (cal.puntuaciones && cal.puntuaciones[nombre] !== undefined) delete cal.puntuaciones[nombre];
     });
-    
     guardarDatos();
     renderizarCategorias();
 }
@@ -339,22 +339,17 @@ function eliminarCategoria(nombre) {
 function renderizarCategorias() {
     const c = document.getElementById('lista-categorias');
     if (!c) return;
-    
     if (appData.categorias.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay categorías configuradas. Agregue al menos una.</p>';
+        c.innerHTML = '<p class="empty-message">No hay categorías configuradas.</p>';
         return;
     }
-    
-    c.innerHTML = '<h3>Categorías de Evaluación (' + appData.categorias.length + ')</h3>' +
+    c.innerHTML = '<h3>Categorías (' + appData.categorias.length + ')</h3>' +
         appData.categorias.map(cat => 
-            '<div class="categoria-card">' +
-                '<span class="categoria-nombre">📌 ' + cat + '</span>' +
-                '<button class="btn-delete btn-small" onclick="window.eliminarCategoria(\'' + cat + '\')">🗑️ Eliminar</button>' +
-            '</div>'
+            '<div class="categoria-card"><span class="categoria-nombre">📌 ' + cat + '</span><button class="btn-delete btn-small" onclick="window.eliminarCategoria(\'' + cat + '\')">🗑️ Eliminar</button></div>'
         ).join('');
 }
 
-// ============ REGISTRO (SOLO ADMIN) ============
+// ============ REGISTRO ============
 function registrarParticipante() {
     const nombre = document.getElementById('nombre-participante').value.trim();
     const tipo = document.getElementById('tipo-participante').value;
@@ -363,12 +358,7 @@ function registrarParticipante() {
     const codigo = generarCodigo();
     appData.participantes.push({ id: generarId(), nombre, tipo, codigo });
     guardarDatos();
-    
-    alert('✅ Participante registrado.\n\n👤 Nombre: ' + nombre + 
-          '\n🔑 Código: ' + codigo + 
-          '\n📋 Tipo: ' + (tipo === 'cocinero' ? 'Cocinero/a' : 'Invitado/a') +
-          '\n\n⚠️ Entregue este código al participante.');
-    
+    alert('✅ Participante registrado.\n\n👤 ' + nombre + '\n🔑 Código: ' + codigo + '\n📋 ' + (tipo === 'cocinero' ? 'Cocinero/a' : 'Invitado/a'));
     document.getElementById('form-registro').reset();
     renderizarParticipantes();
 }
@@ -376,27 +366,18 @@ function registrarParticipante() {
 function renderizarParticipantes() {
     const c = document.getElementById('lista-participantes');
     if (!c) return;
-    
     if (appData.participantes.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay participantes registrados.</p>';
+        c.innerHTML = '<p class="empty-message">No hay participantes.</p>';
         return;
     }
-    
     c.innerHTML = '<h3>Participantes (' + appData.participantes.length + ')</h3>' + 
         appData.participantes.map(p => 
-        '<div class="card">' +
-            '<div class="card-header">' +
-                '<strong>' + p.nombre + '</strong>' +
-                '<span class="badge badge-' + p.tipo + '">' + (p.tipo === 'cocinero' ? 'Cocinero' : 'Invitado') + '</span>' +
-            '</div>' +
-            '<p style="margin:0.5rem 0;">🔑 <strong>Código:</strong> <code style="font-size:1.1rem;background:var(--bg);padding:0.2rem 0.5rem;border-radius:4px;">' + p.codigo + '</code></p>' +
-            '<button class="btn-delete" onclick="window.eliminarParticipante(\'' + p.id + '\')">🗑️ Eliminar</button>' +
-        '</div>'
+        '<div class="card"><div class="card-header"><strong>' + p.nombre + '</strong><span class="badge badge-' + p.tipo + '">' + (p.tipo === 'cocinero' ? 'Cocinero' : 'Invitado') + '</span></div><p>🔑 <strong>Código:</strong> <code>' + p.codigo + '</code></p><button class="btn-delete" onclick="window.eliminarParticipante(\'' + p.id + '\')">🗑️ Eliminar</button></div>'
     ).join('');
 }
 
 function eliminarParticipante(id) {
-    if (!confirm('¿Eliminar participante y todos sus datos?')) return;
+    if (!confirm('¿Eliminar?')) return;
     appData.participantes = appData.participantes.filter(p => p.id !== id);
     appData.platos = appData.platos.filter(p => p.cocinero_id !== id);
     appData.calificaciones = appData.calificaciones.filter(c => c.juez_id !== id);
@@ -421,20 +402,23 @@ function registrarPlato() {
     } else if (sesionActual && sesionActual.tipo === 'cocinero') {
         cocinero_id = sesionActual.id;
     } else {
-        alert('No tiene permisos para registrar platos.');
+        alert('No tiene permisos.');
         return;
     }
     
     const nombre = document.getElementById('nombre-plato').value.trim();
     const descripcion = document.getElementById('descripcion-plato').value.trim();
     
-    if (!cocinero_id || !nombre) return;
+    if (!cocinero_id || !nombre) {
+        alert('Complete el nombre del plato.');
+        return;
+    }
     
     appData.platos.push({ id: generarId(), nombre, descripcion, cocinero_id });
     guardarDatos();
     document.getElementById('form-plato').reset();
-    renderizarPlatos();
-    alert('✅ Plato registrado correctamente.');
+    prepararPanelPlatos();
+    alert('✅ Plato registrado.');
 }
 
 function renderizarPlatos() {
@@ -442,8 +426,6 @@ function renderizarPlatos() {
     if (!c) return;
     
     let platosFiltrados = appData.platos;
-    
-    // Si es cocinero, solo ve sus platos
     if (sesionActual && sesionActual.tipo === 'cocinero' && !sesionActual.esAdmin) {
         platosFiltrados = appData.platos.filter(p => p.cocinero_id === sesionActual.id);
     }
@@ -455,24 +437,18 @@ function renderizarPlatos() {
     
     c.innerHTML = '<h3>Platos (' + platosFiltrados.length + ')</h3>' + platosFiltrados.map(p => {
         const co = obtenerParticipante(p.cocinero_id);
-        return '<div class="card">' +
-            '<div class="card-header">' +
-                '<strong>🍽️ ' + p.nombre + '</strong>' +
-                '<span style="font-size:0.85rem;color:var(--text-light);">' + (co ? co.nombre : '?') + '</span>' +
-            '</div>' +
-            (p.descripcion ? '<p style="font-size:0.9rem;color:var(--text-light);">' + p.descripcion + '</p>' : '') +
-            (sesionActual && (sesionActual.esAdmin || sesionActual.id === p.cocinero_id) ? 
-                '<button class="btn-delete" onclick="window.eliminarPlato(\'' + p.id + '\')">🗑️ Eliminar</button>' : '') +
-        '</div>';
+        return '<div class="card"><div class="card-header"><strong>🍽️ ' + p.nombre + '</strong><span>' + (co ? co.nombre : '?') + '</span></div>' +
+            (p.descripcion ? '<p>' + p.descripcion + '</p>' : '') +
+            '<button class="btn-delete" onclick="window.eliminarPlato(\'' + p.id + '\')">🗑️ Eliminar</button></div>';
     }).join('');
 }
 
 function eliminarPlato(id) {
-    if (!confirm('¿Eliminar este plato?')) return;
+    if (!confirm('¿Eliminar?')) return;
     appData.platos = appData.platos.filter(p => p.id !== id);
     appData.calificaciones = appData.calificaciones.filter(c => c.plato_id !== id);
     guardarDatos();
-    renderizarPlatos();
+    prepararPanelPlatos();
 }
 
 // ============ CALIFICACIÓN ============
@@ -481,18 +457,18 @@ function renderizarCalificacion(juezId) {
     if (!c) return;
     
     if (appData.categorias.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay categorías configuradas para evaluar. Contacte al administrador.</p>';
+        c.innerHTML = '<p class="empty-message">No hay categorías configuradas.</p>';
         return;
     }
     
     if (sesionActual && sesionActual.esAdmin) {
-        c.innerHTML = '<p class="empty-message">Como administrador puede ver todas las calificaciones en Resultados. Si desea calificar como participante, use un código de invitado.</p>';
+        c.innerHTML = '<p class="empty-message">Como admin, use un código de invitado para calificar.</p>';
         return;
     }
     
     const platos = appData.platos.filter(p => p.cocinero_id !== juezId);
     if (platos.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay platos disponibles para evaluar. Espere a que otros cocineros registren sus platos.</p>';
+        c.innerHTML = '<p class="empty-message">No hay platos para evaluar.</p>';
         return;
     }
     
@@ -500,44 +476,26 @@ function renderizarCalificacion(juezId) {
         const calExistente = appData.calificaciones.find(cal => cal.plato_id === p.id && cal.juez_id === juezId);
         const co = obtenerParticipante(p.cocinero_id);
         
-        let html = '<div class="voto-card">' +
-            '<div class="voto-card-header">' +
-                '<strong>🍽️ ' + p.nombre + '</strong>' +
-                '<span style="font-size:0.85rem;color:var(--text-light);">de ' + (co ? co.nombre : '?') + '</span>' +
-            '</div>' +
-            (p.descripcion ? '<p style="font-size:0.9rem;color:var(--text-light);margin-bottom:1rem;">' + p.descripcion + '</p>' : '');
+        let html = '<div class="voto-card"><div class="voto-card-header"><strong>🍽️ ' + p.nombre + '</strong><span>de ' + (co ? co.nombre : '?') + '</span></div>' +
+            (p.descripcion ? '<p>' + p.descripcion + '</p>' : '');
         
         if (calExistente) {
-            html += '<div style="background:var(--card);padding:1rem;border-radius:8px;margin-bottom:0.5rem;">' +
-                '<strong>✅ Ya calificado</strong>' +
-                appData.categorias.map(cat => {
-                    const punt = calExistente.puntuaciones && calExistente.puntuaciones[cat] ? calExistente.puntuaciones[cat] : 0;
-                    return '<div style="margin-top:0.3rem;"><span style="font-size:0.85rem;">' + cat + ':</span> ' + '★'.repeat(punt) + '☆'.repeat(5-punt) + ' (' + punt + '/5)</div>';
-                }).join('') +
-                (calExistente.comentario ? '<div style="margin-top:0.3rem;font-style:italic;color:var(--text-light);">💬 "' + calExistente.comentario + '"</div>' : '') +
-                '<button class="btn-delete btn-small" style="margin-top:0.5rem;" onclick="window.cambiarCalificacion(\'' + calExistente.id + '\',\'' + juezId + '\')">Modificar Calificación</button>' +
-                '</div>';
+            html += '<div style="background:var(--card);padding:1rem;border-radius:8px;"><strong>✅ Ya calificado</strong>';
+            appData.categorias.forEach(cat => {
+                const punt = calExistente.puntuaciones && calExistente.puntuaciones[cat] ? calExistente.puntuaciones[cat] : 0;
+                html += '<div>' + cat + ': ' + '★'.repeat(punt) + '☆'.repeat(5-punt) + ' (' + punt + '/5)</div>';
+            });
+            html += (calExistente.comentario ? '<div>💬 "' + calExistente.comentario + '"</div>' : '') +
+                '<button class="btn-delete btn-small" onclick="window.cambiarCalificacion(\'' + calExistente.id + '\',\'' + juezId + '\')">Modificar</button></div>';
         } else {
             html += '<div style="background:var(--card);padding:1rem;border-radius:8px;">';
-            
             appData.categorias.forEach(cat => {
-                html += '<div class="categoria-voto">' +
-                    '<label>' + cat + ' (1-5):</label>' +
-                    '<div class="stars" data-plato="' + p.id + '" data-categoria="' + cat + '">' +
-                        [1,2,3,4,5].map(n => 
-                            '<span onclick="window.seleccionarEstrella(this, ' + n + ')" data-valor="' + n + '">★</span>'
-                        ).join('') +
-                    '</div>' +
-                    '<input type="hidden" class="puntuacion-hidden" data-categoria="' + cat + '" value="0">' +
-                '</div>';
+                html += '<div class="categoria-voto"><label>' + cat + ' (1-5):</label><div class="stars" data-plato="' + p.id + '" data-categoria="' + cat + '">' +
+                    [1,2,3,4,5].map(n => '<span onclick="window.seleccionarEstrella(this, ' + n + ')" data-valor="' + n + '">★</span>').join('') +
+                    '</div><input type="hidden" class="puntuacion-hidden" data-categoria="' + cat + '" value="0"></div>';
             });
-            
-            html += '<div class="form-group" style="margin-top:0.8rem;">' +
-                '<label>Comentario general (opcional):</label>' +
-                '<textarea class="comentario-general" placeholder="Un comentario sobre el plato..." rows="2" style="width:100%;"></textarea>' +
-                '</div>' +
-                '<button class="btn-primary btn-small" onclick="window.enviarCalificacion(\'' + p.id + '\',\'' + juezId + '\')">✅ Enviar Calificación</button>' +
-                '</div>';
+            html += '<div class="form-group"><label>Comentario:</label><textarea class="comentario-general" rows="2"></textarea></div>' +
+                '<button class="btn-primary btn-small" onclick="window.enviarCalificacion(\'' + p.id + '\',\'' + juezId + '\')">✅ Enviar Calificación</button></div>';
         }
         
         html += '</div>';
@@ -547,20 +505,15 @@ function renderizarCalificacion(juezId) {
 
 function seleccionarEstrella(elemento, valor) {
     const starsDiv = elemento.parentElement;
-    const todasEstrellas = starsDiv.querySelectorAll('span');
-    const hiddenInput = starsDiv.parentElement.querySelector('.puntuacion-hidden');
+    const todas = starsDiv.querySelectorAll('span');
+    const hidden = starsDiv.parentElement.querySelector('.puntuacion-hidden');
     
-    todasEstrellas.forEach((estrella, index) => {
-        if (index < valor) {
-            estrella.classList.add('active');
-            estrella.style.opacity = '1';
-        } else {
-            estrella.classList.remove('active');
-            estrella.style.opacity = '0.7';
-        }
+    todas.forEach((estrella, i) => {
+        estrella.style.opacity = i < valor ? '1' : '0.7';
+        estrella.classList.toggle('active', i < valor);
     });
     
-    if (hiddenInput) hiddenInput.value = valor;
+    if (hidden) hidden.value = valor;
 }
 
 function enviarCalificacion(platoId, juezId) {
@@ -571,20 +524,16 @@ function enviarCalificacion(platoId, juezId) {
     const hiddenInputs = votoCard.querySelectorAll('.puntuacion-hidden');
     
     hiddenInputs.forEach(input => {
-        const categoria = input.dataset.categoria;
-        const valor = parseInt(input.value);
-        puntuaciones[categoria] = valor || 0;
+        puntuaciones[input.dataset.categoria] = parseInt(input.value) || 0;
     });
     
-    // Verificar que todas las categorías tengan puntuación
     const sinCalificar = appData.categorias.filter(cat => !puntuaciones[cat] || puntuaciones[cat] === 0);
     if (sinCalificar.length > 0) {
-        alert('Por favor califique todas las categorías: ' + sinCalificar.join(', '));
+        alert('Califique todas las categorías: ' + sinCalificar.join(', '));
         return;
     }
     
-    const comentario = votoCard.querySelector('.comentario-general') ? 
-        votoCard.querySelector('.comentario-general').value.trim() : '';
+    const comentario = votoCard.querySelector('.comentario-general')?.value.trim() || '';
     
     appData.calificaciones.push({
         id: generarId(),
@@ -610,19 +559,17 @@ function renderizarResultados() {
     if (!c) return;
     
     if (appData.platos.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay platos para mostrar resultados.</p>';
+        c.innerHTML = '<p class="empty-message">No hay platos.</p>';
         return;
     }
     
     if (appData.categorias.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay categorías configuradas. El administrador debe configurarlas primero.</p>';
+        c.innerHTML = '<p class="empty-message">No hay categorías configuradas.</p>';
         return;
     }
     
     const ranking = appData.platos.map(p => {
         const cals = appData.calificaciones.filter(cal => cal.plato_id === p.id);
-        
-        // Calcular promedio general (promedio de todos los promedios por categoría)
         let sumaTotal = 0;
         let cantidadCategorias = 0;
         let detalleCategorias = {};
@@ -640,12 +587,10 @@ function renderizarResultados() {
             }
         });
         
-        const promedioGeneral = cantidadCategorias > 0 ? sumaTotal / cantidadCategorias : 0;
-        
         return {
             ...p,
             cocinero: obtenerParticipante(p.cocinero_id),
-            promedio: Math.round(promedioGeneral * 10) / 10,
+            promedio: cantidadCategorias > 0 ? Math.round((sumaTotal / cantidadCategorias) * 10) / 10 : 0,
             totalVotos: cals.length,
             detalleCategorias
         };
@@ -660,20 +605,11 @@ function renderizarResultados() {
             detalleHTML += '<span>📌 ' + cat + ': <strong>' + punt.toFixed(1) + '</strong></span>';
         }
         
-        return '<div class="ranking-item ' + clase + '">' +
-            '<div class="rank-pos">' + (medalla || '#' + (i+1)) + '</div>' +
-            '<div class="rank-info">' +
-                '<strong>' + item.nombre + '</strong>' +
-                '<div style="font-size:0.85rem;color:var(--text-light);">por ' + (item.cocinero ? item.cocinero.nombre : '?') + '</div>' +
-                '<div style="font-size:0.8rem;">' + item.totalVotos + ' voto' + (item.totalVotos !== 1 ? 's' : '') + '</div>' +
-                '<div class="rank-detalle">' + detalleHTML + '</div>' +
-            '</div>' +
-            '<div class="rank-puntos">' + item.promedio.toFixed(1) + '</div>' +
-        '</div>';
+        return '<div class="ranking-item ' + clase + '"><div class="rank-pos">' + (medalla || '#' + (i+1)) + '</div><div class="rank-info"><strong>' + item.nombre + '</strong><div>por ' + (item.cocinero ? item.cocinero.nombre : '?') + '</div><div>' + item.totalVotos + ' voto' + (item.totalVotos !== 1 ? 's' : '') + '</div><div class="rank-detalle">' + detalleHTML + '</div></div><div class="rank-puntos">' + item.promedio.toFixed(1) + '</div></div>';
     }).join('');
 }
 
-// ============ EXPORTAR FUNCIONES GLOBALES ============
+// ============ GLOBALES ============
 window.eliminarParticipante = eliminarParticipante;
 window.eliminarPlato = eliminarPlato;
 window.eliminarCategoria = eliminarCategoria;
