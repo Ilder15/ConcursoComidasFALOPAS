@@ -4,14 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Concurso de Comida Familiar 🍳</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>🍽️ Concurso de Comida Familiar</h1>
+            
+            <!-- Toggle Modo Oscuro -->
+            <div class="theme-toggle">
+                <button id="btn-theme" onclick="toggleTheme()" title="Cambiar modo oscuro/claro">
+                    <span class="theme-icon">🌙</span>
+                    <span class="theme-text">Modo Oscuro</span>
+                </button>
+            </div>
+            
             <nav id="nav">
-                <button class="tab active" data-tab="registro">Registro</button>
+                <button class="tab active" data-tab="login">🔐 Iniciar Sesión</button>
+                <button class="tab" data-tab="registro">Registro</button>
                 <button class="tab" data-tab="platos">Platos</button>
                 <button class="tab" data-tab="calificar">Calificar</button>
                 <button class="tab" data-tab="resultados">Resultados</button>
@@ -19,11 +29,42 @@
         </header>
 
         <main>
+            <!-- Panel de Login con Código -->
+            <section id="panel-login" class="panel active">
+                <h2>🔐 Ingresa tu Código de Participante</h2>
+                
+                <div id="login-form">
+                    <form id="form-login">
+                        <label for="codigo-input">Código de acceso:</label>
+                        <input type="text" id="codigo-input" placeholder="Ingresa tu código de 6 dígitos" 
+                               maxlength="6" pattern="[0-9]{6}" required autocomplete="off">
+                        <button type="submit">Entrar 🚀</button>
+                    </form>
+                    <p style="text-align: center; margin-top: 1rem;">
+                        ¿No tienes código? <a href="#" onclick="mostrarPanel('registro')" class="link">Regístrate aquí</a>
+                    </p>
+                    <div id="login-error" style="color: #ff4757; text-align: center; display: none; margin-top: 0.5rem;"></div>
+                </div>
+                
+                <!-- Info de sesión activa -->
+                <div id="sesion-activa" style="display: none;">
+                    <div class="sesion-card">
+                        <h3>✅ Sesión Activa</h3>
+                        <p><strong>Nombre:</strong> <span id="sesion-nombre"></span></p>
+                        <p><strong>Tipo:</strong> <span id="sesion-tipo"></span></p>
+                        <p><strong>Código:</strong> <span id="sesion-codigo"></span></p>
+                        <button onclick="cerrarSesion()" class="cerrar-sesion-btn">Cerrar Sesión 🔒</button>
+                    </div>
+                </div>
+            </section>
+
             <!-- Panel de Registro -->
-            <section id="panel-registro" class="panel active">
+            <section id="panel-registro" class="panel">
                 <h2>Registro de Participantes</h2>
                 <form id="form-registro">
-                    <input type="text" id="nombre-participante" placeholder="Nombre" required>
+                    <label for="nombre-participante">Nombre:</label>
+                    <input type="text" id="nombre-participante" placeholder="Nombre del participante" required>
+                    <label for="tipo-participante">Tipo:</label>
                     <select id="tipo-participante">
                         <option value="cocinero">Cocinero/a 👨‍🍳</option>
                         <option value="invitado">Invitado/a (solo califica) 🍴</option>
@@ -37,10 +78,13 @@
             <section id="panel-platos" class="panel">
                 <h2>Agregar Plato</h2>
                 <form id="form-plato">
+                    <label for="cocinero-select">Cocinero:</label>
                     <select id="cocinero-select" required>
                         <option value="">Selecciona al cocinero...</option>
                     </select>
+                    <label for="nombre-plato">Nombre del plato:</label>
                     <input type="text" id="nombre-plato" placeholder="Nombre del plato" required>
+                    <label for="descripcion-plato">Descripción:</label>
                     <textarea id="descripcion-plato" placeholder="Descripción (opcional)" rows="2"></textarea>
                     <button type="submit">Agregar Plato 🍲</button>
                 </form>
@@ -50,23 +94,23 @@
             <!-- Panel de Calificación -->
             <section id="panel-calificar" class="panel">
                 <h2>Calificar Platos</h2>
-                <form id="form-calificar">
-                    <select id="juez-select" required>
-                        <option value="">¿Quién eres?</option>
-                    </select>
-                    <div id="platos-a-calificar">
-                        <p>Selecciona un juez para ver los platos disponibles</p>
-                    </div>
-                </form>
+                <div id="info-juez" class="info-bar"></div>
+                <div id="platos-a-calificar">
+                    <p class="mensaje-vacio">Inicia sesión con tu código para calificar platos.</p>
+                </div>
             </section>
 
             <!-- Panel de Resultados -->
             <section id="panel-resultados" class="panel">
                 <h2>🏆 Ranking de Platos</h2>
-                <button id="btn-actualizar-resultados">Actualizar Resultados 🔄</button>
+                <button id="btn-actualizar-resultados" class="refresh-btn">Actualizar Resultados 🔄</button>
                 <div id="tabla-resultados"></div>
             </section>
         </main>
+        
+        <footer>
+            <p>🍳 Concurso de Comida Familiar - ¡Qué gane el mejor plato!</p>
+        </footer>
     </div>
 
     <script src="app.js"></script>
