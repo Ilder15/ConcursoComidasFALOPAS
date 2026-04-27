@@ -1,27 +1,21 @@
 // ============ CONFIGURACIÓN ============
 const CODIGO_ADMIN = '123456';
-let concursoFinalizado = false; // AGREGAR ESTA LÍNEA
+const API_URL = 'https://script.google.com/macros/s/AKfcybXQp1L9y5cDEdtgkpH3ArshvD_pxsOUfw2KDu5GF2d6bJkkKGIsRlU8uA81dlwFm8w/exec';
 
-const STORAGE_KEY = 'concurso_falopas_data';
-const SESSION_KEY = 'concurso_falopas_session';
-const THEME_KEY = 'concurso_falopas_theme';
-const FINALIZADO_KEY = 'concurso_falopas_finalizado'; // AGREGAR ESTA LÍNEA
-const API_URL = 'https://script.google.com/macros/s/AKfycbxQsjLPy5cDEdHgkHpNJAsrxhD_pxsOUFw2KDuSGF2d6bUkkKGIsRIU8uA8ldWFm8w/exec';
-
-const CATEGORIAS_DEFAULT = ['Presentación', 'Sabor', 'Originalidad', 'Bebida'];
+let concursoFinalizado = false;
 
 let appData = {
     participantes: [],
     platos: [],
-    categorias: [...CATEGORIAS_DEFAULT],
+    categorias: [],
     calificaciones: []
 };
 
 let sesionActual = null;
 
 // ============ INICIALIZACIÓN ============
-document.addEventListener('DOMContentLoaded', function() {
-    cargarDatos();
+document.addEventListener('DOMContentLoaded', async function() {
+    await cargarDatos();
     cargarTema();
     configurarEventos();
     construirMenu();
@@ -39,42 +33,58 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// ============ DATOS ============
-function cargarDatos() {
+// ============ API GOOGLE SHEETS ============
+async function apiCall(action, data = {}) {
     try {
-        const datos = localStorage.getItem(STORAGE_KEY);
-        if (datos) {
-            const parsed = JSON.parse(datos);
-            appData.participantes = parsed.participantes || [];
-            appData.platos = parsed.platos || [];
-            appData.categorias = parsed.categorias || [...CATEGORIAS_DEFAULT];
-            appData.calificaciones = parsed.calificaciones || [];
-        }
-    } catch(e) {}
-    
-    try {
-        const sesion = localStorage.getItem(SESSION_KEY);
-        if (sesion) sesionActual = JSON.parse(sesion);
-    } catch(e) {}
-    
-    concursoFinalizado = localStorage.getItem(FINALIZADO_KEY) === 'true';
-}
-
-function guardarDatos() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-}
-
-function guardarSesion() {
-    if (sesionActual) {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(sesionActual));
-    } else {
-        localStorage.removeItem(SESSION_KEY);
+        const params = new URLSearchParams({ action, data: JSON.stringify(data) });
+        const response = await fetch(API_URL + '?' + params.toString());
+        return await response.json();
+    } catch(e) {
+        console.error('Error API:', e);
+        return { error: 'Error de conexión' };
     }
 }
 
-// ============ TEMA ============
+// ============ DATOS ============
+async function cargarDatos() {
+    const result = await apiCall('getAll');
+    
+    if (result.error) {
+        console.error('Error cargando datos:', result.error);
+        return;
+    }
+    
+    if (result.participantes) appData.participantes = result.participantes;
+    if (result.platos) appData.platos = result.platos;
+    if (result.categorias && Array.isArray(result.categorias)) appData.categorias = result.categorias;
+    
+    if (result.calificaciones) {
+        appData.calificaciones = result.calificaciones;
+        appData.calificaciones.forEach(c => {
+            if (typeof c.puntuaciones === 'string') {
+                try { c.puntuaciones = JSON.parse(c.puntuaciones); } catch(e) { c.puntuaciones = {}; }
+            }
+        });
+    }
+    
+    if (result.config) {
+        concursoFinalizado = result.config.finalizado === true || result.config.finalizado === 'true';
+    }
+    
+    // Cargar sesión guardada
+    const sesion = localStorage.getItem('concurso_session');
+    if (sesion) {
+        try { sesionActual = JSON.parse(sesion); } catch(e) { sesionActual = null; }
+    }
+}
+
+async function refrescarDatos() {
+    await cargarDatos();
+}
+
+// ============ TEMA OSCURO ============
 function cargarTema() {
-    const tema = localStorage.getItem(THEME_KEY) || 'light';
+    const tema = localStorage.getItem('concurso_theme') || 'light';
     document.documentElement.setAttribute('data-theme', tema);
     actualizarIconoTema(tema);
 }
@@ -83,7 +93,7 @@ function toggleTheme() {
     const actual = document.documentElement.getAttribute('data-theme');
     const nuevo = actual === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', nuevo);
-    localStorage.setItem(THEME_KEY, nuevo);
+    localStorage.setItem('concurso_theme', nuevo);
     actualizarIconoTema(nuevo);
 }
 
@@ -120,36 +130,25 @@ function construirMenu() {
             <button class="nav-btn" data-tab="logout">🚪 Salir</button>
         `;
     } else {
-        nav.innerHTML = `
-            <button class="nav-btn active" data-tab="login">🔐 Iniciar Sesión</button>
-        `;
+        nav.innerHTML = `<button class="nav-btn active" data-tab="login">🔐 Iniciar Sesión</button>`;
     }
     
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const target = this.dataset.tab;
-            
-            if (target === 'logout') {
-                cerrarSesion();
-                return;
-            }
-            
+            if (target === 'logout') { cerrarSesion(); return; }
             if ((target === 'calificar' || target === 'resultados') && !sesionActual) {
-                alert('Debe iniciar sesión primero.');
-                return;
+                alert('Debe iniciar sesión primero.'); return;
             }
-            
             if ((target === 'registro' || target === 'categorias') && (!sesionActual || !sesionActual.esAdmin)) {
-                alert('Acceso restringido al administrador.');
-                return;
+                alert('Acceso restringido al administrador.'); return;
             }
-            
             mostrarPanel(target);
         });
     });
 }
 
-// ============ EVENTOS ============
+// ============ CONFIGURAR EVENTOS ============
 function configurarEventos() {
     document.getElementById('btn-theme').addEventListener('click', toggleTheme);
     
@@ -158,29 +157,43 @@ function configurarEventos() {
         hacerLogin();
     });
     
-    document.getElementById('form-registro').addEventListener('submit', function(e) {
+    document.getElementById('form-registro').addEventListener('submit', async function(e) {
         e.preventDefault();
         if (!sesionActual || !sesionActual.esAdmin) return;
-        registrarParticipante();
+        await registrarParticipante();
     });
     
-    document.getElementById('form-categoria').addEventListener('submit', function(e) {
+    document.getElementById('form-categoria').addEventListener('submit', async function(e) {
         e.preventDefault();
         if (!sesionActual || !sesionActual.esAdmin) return;
-        agregarCategoria();
+        await agregarCategoria();
     });
     
-    document.getElementById('form-plato').addEventListener('submit', function(e) {
+    document.getElementById('form-plato').addEventListener('submit', async function(e) {
         e.preventDefault();
-        registrarPlato();
+        await registrarPlato();
     });
     
-    document.getElementById('btn-cerrar-sesion')?.addEventListener('click', cerrarSesion);
-    document.getElementById('btn-actualizar-resultados')?.addEventListener('click', renderizarResultados);
-       // Botón finalizar concurso
+    const btnCerrar = document.getElementById('btn-cerrar-sesion');
+    if (btnCerrar) btnCerrar.addEventListener('click', cerrarSesion);
+    
+    const btnActualizar = document.getElementById('btn-actualizar-resultados');
+    if (btnActualizar) {
+        btnActualizar.addEventListener('click', async function() {
+            await refrescarDatos();
+            renderizarResultados();
+        });
+    }
+    
     const btnFinalizar = document.getElementById('btn-finalizar');
     if (btnFinalizar) {
-        btnFinalizar.addEventListener('click', finalizarConcurso);
+        btnFinalizar.addEventListener('click', async function() {
+            if (concursoFinalizado) {
+                await reabrirConcurso();
+            } else {
+                await finalizarConcurso();
+            }
+        });
     }
 }
 
@@ -191,123 +204,6 @@ function generarId() {
 
 function obtenerParticipante(id) {
     return appData.participantes.find(p => p.id === id);
-}
-
-function generarCodigo() {
-    let codigo;
-    do {
-        codigo = Math.floor(100000 + Math.random() * 900000).toString();
-    } while (appData.participantes.some(p => p.codigo === codigo) || codigo === CODIGO_ADMIN);
-    return codigo;
-}
-// ============ FINALIZAR CONCURSO ============
-function finalizarConcurso() {
-    if (!sesionActual || !sesionActual.esAdmin) {
-        alert('Solo el administrador puede finalizar el concurso.');
-        return;
-    }
-    
-    if (concursoFinalizado) {
-        alert('El concurso ya está finalizado.');
-        return;
-    }
-    
-    if (appData.platos.length === 0) {
-        alert('No hay platos registrados para finalizar el concurso.');
-        return;
-    }
-    
-    if (!confirm('⚠️ ¿Está seguro de FINALIZAR el concurso?\n\n' +
-                 '• Se mostrarán los resultados oficiales\n' +
-                 '• Se bloquearán las votaciones\n' +
-                 '• Esta acción no se puede deshacer\n\n' +
-                 '¿Continuar?')) {
-        return;
-    }
-    
-    concursoFinalizado = true;
-    localStorage.setItem(FINALIZADO_KEY, 'true');
-    
-    // Efecto de confetti
-    lanzarConfetti();
-    
-    // Actualizar UI
-    actualizarBannerFinalizado();
-    renderizarResultados();
-    mostrarPanel('resultados');
-    
-    // Bloquear panel de calificación
-    const platosCalificar = document.getElementById('platos-a-calificar');
-    if (platosCalificar) {
-        platosCalificar.innerHTML = '<div class="votacion-bloqueada" style="padding:3rem;text-align:center;">' +
-            '<p class="empty-message">🔒 El concurso ha finalizado. Las votaciones están cerradas.</p>' +
-            '</div>';
-    }
-    
-    alert('🏆 ¡Concurso Finalizado! 🏆\n\nResultados oficiales publicados.');
-}
-
-function revertirFinalizacion() {
-    if (!sesionActual || !sesionActual.esAdmin) {
-        alert('Solo el administrador puede revertir la finalización.');
-        return;
-    }
-    
-    if (!concursoFinalizado) return;
-    
-    if (!confirm('¿Revertir la finalización del concurso?\nSe habilitarán las votaciones nuevamente.')) return;
-    
-    concursoFinalizado = false;
-    localStorage.setItem(FINALIZADO_KEY, 'false');
-    actualizarBannerFinalizado();
-    renderizarResultados();
-    alert('✅ Concurso reabierto. Los participantes pueden volver a votar.');
-}
-
-function actualizarBannerFinalizado() {
-    const banner = document.getElementById('banner-finalizado');
-    const btnFinalizar = document.getElementById('btn-finalizar');
-    const podio = document.getElementById('podio-final');
-    
-    if (concursoFinalizado) {
-        if (banner) banner.style.display = 'block';
-        if (btnFinalizar) {
-            btnFinalizar.textContent = '🔄 Reabrir Concurso';
-            btnFinalizar.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
-            btnFinalizar.style.color = '#fff';
-            btnFinalizar.onclick = revertirFinalizacion;
-        }
-        if (podio) podio.style.display = 'block';
-    } else {
-        if (banner) banner.style.display = 'none';
-        if (btnFinalizar) {
-            btnFinalizar.textContent = '🏆 Finalizar Concurso';
-            btnFinalizar.style.background = 'linear-gradient(135deg, #FFD700, #FFA500)';
-            btnFinalizar.style.color = '#1a1a2e';
-            btnFinalizar.onclick = finalizarConcurso;
-        }
-        if (podio) podio.style.display = 'none';
-    }
-}
-
-function lanzarConfetti() {
-    const colores = ['#FFD700', '#FF6B6B', '#4ECDC4', '#FFA500', '#C9A96E', '#FF69B4', '#00D2FF'];
-    
-    for (let i = 0; i < 80; i++) {
-        setTimeout(() => {
-            const confetti = document.createElement('div');
-            confetti.className = 'confetti';
-            confetti.style.left = Math.random() * 100 + '%';
-            confetti.style.width = (Math.random() * 10 + 5) + 'px';
-            confetti.style.height = (Math.random() * 10 + 5) + 'px';
-            confetti.style.background = colores[Math.floor(Math.random() * colores.length)];
-            confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
-            confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
-            document.body.appendChild(confetti);
-            
-            setTimeout(() => confetti.remove(), 3000);
-        }, i * 30);
-    }
 }
 
 // ============ NAVEGACIÓN ============
@@ -341,34 +237,6 @@ function actualizarPanel(panel) {
     }
 }
 
-// ============ PANEL PLATOS (CORREGIDO) ============
-function prepararPanelPlatos() {
-    const cocineroSelect = document.getElementById('cocinero-select');
-    const cocineroGroup = document.getElementById('cocinero-group');
-    const banner = document.getElementById('platos-admin-banner');
-    
-    if (sesionActual && sesionActual.esAdmin) {
-        // Admin: mostrar selector de cocinero
-        if (banner) banner.style.display = 'block';
-        if (cocineroGroup) cocineroGroup.style.display = 'block';
-        if (cocineroSelect) {
-            cocineroSelect.setAttribute('required', '');
-            cocineroSelect.style.display = '';
-        }
-        renderizarCocineros();
-    } else if (sesionActual && sesionActual.tipo === 'cocinero') {
-        // Cocinero: ocultar selector (registra sus propios platos)
-        if (banner) banner.style.display = 'none';
-        if (cocineroGroup) cocineroGroup.style.display = 'none';
-        if (cocineroSelect) {
-            cocineroSelect.removeAttribute('required');
-            cocineroSelect.style.display = 'none';
-        }
-    }
-    
-    renderizarPlatos();
-}
-
 // ============ LOGIN ============
 function hacerLogin() {
     const codigo = document.getElementById('codigo-input').value.trim();
@@ -381,7 +249,7 @@ function hacerLogin() {
     
     if (codigo === CODIGO_ADMIN) {
         sesionActual = { id: 'admin', nombre: 'Administrador', tipo: 'admin', codigo: CODIGO_ADMIN, esAdmin: true };
-        guardarSesion();
+        localStorage.setItem('concurso_session', JSON.stringify(sesionActual));
         actualizarUISesion();
         construirMenu();
         document.getElementById('codigo-input').value = '';
@@ -398,7 +266,7 @@ function hacerLogin() {
     }
     
     sesionActual = { id: participante.id, nombre: participante.nombre, tipo: participante.tipo, codigo: participante.codigo, esAdmin: false };
-    guardarSesion();
+    localStorage.setItem('concurso_session', JSON.stringify(sesionActual));
     actualizarUISesion();
     construirMenu();
     document.getElementById('codigo-input').value = '';
@@ -408,7 +276,7 @@ function hacerLogin() {
 
 function cerrarSesion() {
     sesionActual = null;
-    guardarSesion();
+    localStorage.removeItem('concurso_session');
     actualizarUISesion();
     construirMenu();
     mostrarPanel('login');
@@ -432,52 +300,71 @@ function actualizarUISesion() {
     }
 }
 
-// ============ CATEGORÍAS ============
-function agregarCategoria() {
+// ============ CATEGORÍAS (ADMIN) ============
+async function agregarCategoria() {
     const input = document.getElementById('nombre-categoria');
     const nombre = input.value.trim();
     if (!nombre) return;
-    if (appData.categorias.includes(nombre)) { alert('Esa categoría ya existe.'); return; }
     
-    appData.categorias.push(nombre);
-    guardarDatos();
+    const result = await apiCall('addCategoria', { nombre });
+    if (result.error) {
+        alert('Error: ' + result.error);
+        return;
+    }
+    
+    await refrescarDatos();
     input.value = '';
     renderizarCategorias();
 }
 
-function eliminarCategoria(nombre) {
+async function eliminarCategoria(nombre) {
     if (!confirm('¿Eliminar la categoría "' + nombre + '"?')) return;
-    appData.categorias = appData.categorias.filter(c => c !== nombre);
-    appData.calificaciones.forEach(cal => {
-        if (cal.puntuaciones && cal.puntuaciones[nombre] !== undefined) delete cal.puntuaciones[nombre];
-    });
-    guardarDatos();
+    await apiCall('deleteCategoria', { nombre });
+    await refrescarDatos();
     renderizarCategorias();
 }
 
 function renderizarCategorias() {
     const c = document.getElementById('lista-categorias');
     if (!c) return;
+    
     if (appData.categorias.length === 0) {
         c.innerHTML = '<p class="empty-message">No hay categorías configuradas.</p>';
         return;
     }
+    
     c.innerHTML = '<h3>Categorías (' + appData.categorias.length + ')</h3>' +
         appData.categorias.map(cat => 
-            '<div class="categoria-card"><span class="categoria-nombre">📌 ' + cat + '</span><button class="btn-delete btn-small" onclick="window.eliminarCategoria(\'' + cat + '\')">🗑️ Eliminar</button></div>'
+            '<div class="categoria-card">' +
+                '<span class="categoria-nombre">📌 ' + cat + '</span>' +
+                '<button class="btn-delete btn-small" onclick="window.eliminarCategoria(\'' + cat + '\')">🗑️ Eliminar</button>' +
+            '</div>'
         ).join('');
 }
 
-// ============ REGISTRO ============
-function registrarParticipante() {
+// ============ REGISTRO DE PARTICIPANTES (ADMIN) ============
+async function registrarParticipante() {
     const nombre = document.getElementById('nombre-participante').value.trim();
     const tipo = document.getElementById('tipo-participante').value;
     if (!nombre) return;
     
-    const codigo = generarCodigo();
-    appData.participantes.push({ id: generarId(), nombre, tipo, codigo });
-    guardarDatos();
-    alert('✅ Participante registrado.\n\n👤 ' + nombre + '\n🔑 Código: ' + codigo + '\n📋 ' + (tipo === 'cocinero' ? 'Cocinero/a' : 'Invitado/a'));
+    const id = generarId();
+    const result = await apiCall('addParticipante', { id, nombre, tipo });
+    
+    if (result.error) {
+        alert('Error: ' + result.error);
+        return;
+    }
+    
+    await refrescarDatos();
+    
+    if (result.codigo) {
+        alert('✅ Participante registrado exitosamente.\n\n👤 Nombre: ' + nombre + 
+              '\n🔑 Código de acceso: ' + result.codigo + 
+              '\n📋 Tipo: ' + (tipo === 'cocinero' ? 'Cocinero/a' : 'Invitado/a') +
+              '\n\n⚠️ Entregue este código al participante.');
+    }
+    
     document.getElementById('form-registro').reset();
     renderizarParticipantes();
 }
@@ -485,35 +372,61 @@ function registrarParticipante() {
 function renderizarParticipantes() {
     const c = document.getElementById('lista-participantes');
     if (!c) return;
+    
     if (appData.participantes.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay participantes.</p>';
+        c.innerHTML = '<p class="empty-message">No hay participantes registrados.</p>';
         return;
     }
+    
     c.innerHTML = '<h3>Participantes (' + appData.participantes.length + ')</h3>' + 
         appData.participantes.map(p => 
-        '<div class="card"><div class="card-header"><strong>' + p.nombre + '</strong><span class="badge badge-' + p.tipo + '">' + (p.tipo === 'cocinero' ? 'Cocinero' : 'Invitado') + '</span></div><p>🔑 <strong>Código:</strong> <code>' + p.codigo + '</code></p><button class="btn-delete" onclick="window.eliminarParticipante(\'' + p.id + '\')">🗑️ Eliminar</button></div>'
+        '<div class="card">' +
+            '<div class="card-header">' +
+                '<strong>' + p.nombre + '</strong>' +
+                '<span class="badge badge-' + p.tipo + '">' + (p.tipo === 'cocinero' ? 'Cocinero' : 'Invitado') + '</span>' +
+            '</div>' +
+            '<p style="margin:0.5rem 0;">🔑 <strong>Código:</strong> <code style="font-size:1.1rem;background:var(--bg);padding:0.2rem 0.5rem;border-radius:4px;">' + p.codigo + '</code></p>' +
+            '<button class="btn-delete" onclick="window.eliminarParticipante(\'' + p.id + '\')">🗑️ Eliminar</button>' +
+        '</div>'
     ).join('');
 }
 
-function eliminarParticipante(id) {
-    if (!confirm('¿Eliminar?')) return;
-    appData.participantes = appData.participantes.filter(p => p.id !== id);
-    appData.platos = appData.platos.filter(p => p.cocinero_id !== id);
-    appData.calificaciones = appData.calificaciones.filter(c => c.juez_id !== id);
-    guardarDatos();
+async function eliminarParticipante(id) {
+    if (!confirm('¿Eliminar participante y todos sus datos?')) return;
+    await apiCall('deleteParticipante', { id });
+    await refrescarDatos();
     renderizarParticipantes();
 }
 
 // ============ PLATOS ============
-function renderizarCocineros() {
-    const s = document.getElementById('cocinero-select');
-    if (!s) return;
-    const cocineros = appData.participantes.filter(p => p.tipo === 'cocinero');
-    s.innerHTML = '<option value="">Seleccione un cocinero...</option>' + 
-        cocineros.map(c => '<option value="' + c.id + '">' + c.nombre + '</option>').join('');
+function prepararPanelPlatos() {
+    const cocineroSelect = document.getElementById('cocinero-select');
+    const cocineroGroup = document.getElementById('cocinero-group');
+    const banner = document.getElementById('platos-admin-banner');
+    
+    if (sesionActual && sesionActual.esAdmin) {
+        if (banner) banner.style.display = 'block';
+        if (cocineroGroup) cocineroGroup.style.display = 'block';
+        if (cocineroSelect) {
+            cocineroSelect.setAttribute('required', '');
+            cocineroSelect.style.display = '';
+            const cocineros = appData.participantes.filter(p => p.tipo === 'cocinero');
+            cocineroSelect.innerHTML = '<option value="">Seleccione un cocinero...</option>' + 
+                cocineros.map(c => '<option value="' + c.id + '">' + c.nombre + '</option>').join('');
+        }
+    } else if (sesionActual && sesionActual.tipo === 'cocinero') {
+        if (banner) banner.style.display = 'none';
+        if (cocineroGroup) cocineroGroup.style.display = 'none';
+        if (cocineroSelect) {
+            cocineroSelect.removeAttribute('required');
+            cocineroSelect.style.display = 'none';
+        }
+    }
+    
+    renderizarPlatos();
 }
 
-function registrarPlato() {
+async function registrarPlato() {
     let cocinero_id;
     
     if (sesionActual && sesionActual.esAdmin) {
@@ -521,7 +434,7 @@ function registrarPlato() {
     } else if (sesionActual && sesionActual.tipo === 'cocinero') {
         cocinero_id = sesionActual.id;
     } else {
-        alert('No tiene permisos.');
+        alert('No tiene permisos para registrar platos.');
         return;
     }
     
@@ -533,11 +446,12 @@ function registrarPlato() {
         return;
     }
     
-    appData.platos.push({ id: generarId(), nombre, descripcion, cocinero_id });
-    guardarDatos();
+    const id = generarId();
+    await apiCall('addPlato', { id, nombre, descripcion, cocinero_id });
+    await refrescarDatos();
     document.getElementById('form-plato').reset();
     prepararPanelPlatos();
-    alert('✅ Plato registrado.');
+    alert('✅ Plato registrado correctamente.');
 }
 
 function renderizarPlatos() {
@@ -556,18 +470,100 @@ function renderizarPlatos() {
     
     c.innerHTML = '<h3>Platos (' + platosFiltrados.length + ')</h3>' + platosFiltrados.map(p => {
         const co = obtenerParticipante(p.cocinero_id);
-        return '<div class="card"><div class="card-header"><strong>🍽️ ' + p.nombre + '</strong><span>' + (co ? co.nombre : '?') + '</span></div>' +
-            (p.descripcion ? '<p>' + p.descripcion + '</p>' : '') +
-            '<button class="btn-delete" onclick="window.eliminarPlato(\'' + p.id + '\')">🗑️ Eliminar</button></div>';
+        return '<div class="card">' +
+            '<div class="card-header">' +
+                '<strong>🍽️ ' + p.nombre + '</strong>' +
+                '<span style="font-size:0.85rem;color:var(--text-light);">' + (co ? co.nombre : '?') + '</span>' +
+            '</div>' +
+            (p.descripcion ? '<p style="font-size:0.9rem;color:var(--text-light);">' + p.descripcion + '</p>' : '') +
+            (sesionActual && (sesionActual.esAdmin || sesionActual.id === p.cocinero_id) ? 
+                '<button class="btn-delete" onclick="window.eliminarPlato(\'' + p.id + '\')">🗑️ Eliminar</button>' : '') +
+        '</div>';
     }).join('');
 }
 
-function eliminarPlato(id) {
-    if (!confirm('¿Eliminar?')) return;
-    appData.platos = appData.platos.filter(p => p.id !== id);
-    appData.calificaciones = appData.calificaciones.filter(c => c.plato_id !== id);
-    guardarDatos();
+async function eliminarPlato(id) {
+    if (!confirm('¿Eliminar este plato?')) return;
+    await apiCall('deletePlato', { id });
+    await refrescarDatos();
     prepararPanelPlatos();
+}
+
+// ============ FINALIZAR / REABRIR CONCURSO ============
+async function finalizarConcurso() {
+    if (!sesionActual || !sesionActual.esAdmin) {
+        alert('Solo el administrador puede finalizar el concurso.');
+        return;
+    }
+    
+    if (!confirm('⚠️ ¿Está seguro de FINALIZAR el concurso?\n\nSe bloquearán las votaciones.\n\n¿Continuar?')) return;
+    
+    await apiCall('finalizarConcurso');
+    concursoFinalizado = true;
+    actualizarBannerFinalizado();
+    lanzarConfetti();
+    await refrescarDatos();
+    renderizarResultados();
+    alert('🏆 ¡Concurso Finalizado! 🏆\n\nResultados oficiales publicados.');
+}
+
+async function reabrirConcurso() {
+    if (!sesionActual || !sesionActual.esAdmin) {
+        alert('Solo el administrador puede reabrir el concurso.');
+        return;
+    }
+    
+    if (!confirm('¿Reabrir el concurso?\nSe habilitarán las votaciones nuevamente.')) return;
+    
+    await apiCall('reabrirConcurso');
+    concursoFinalizado = false;
+    actualizarBannerFinalizado();
+    await refrescarDatos();
+    renderizarResultados();
+    alert('✅ Concurso reabierto. Los participantes pueden volver a votar.');
+}
+
+function actualizarBannerFinalizado() {
+    const banner = document.getElementById('banner-finalizado');
+    const btnFinalizar = document.getElementById('btn-finalizar');
+    const podio = document.getElementById('podio-final');
+    
+    if (concursoFinalizado) {
+        if (banner) banner.style.display = 'block';
+        if (btnFinalizar) {
+            btnFinalizar.textContent = '🔄 Reabrir Concurso';
+            btnFinalizar.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
+            btnFinalizar.style.color = '#fff';
+        }
+        if (podio) podio.style.display = 'block';
+    } else {
+        if (banner) banner.style.display = 'none';
+        if (btnFinalizar) {
+            btnFinalizar.textContent = '🏆 Finalizar Concurso';
+            btnFinalizar.style.background = 'linear-gradient(135deg, #FFD700, #FFA500)';
+            btnFinalizar.style.color = '#1a1a2e';
+        }
+        if (podio) podio.style.display = 'none';
+    }
+}
+
+function lanzarConfetti() {
+    const colores = ['#FFD700', '#FF6B6B', '#4ECDC4', '#FFA500', '#C9A96E', '#FF69B4', '#00D2FF'];
+    
+    for (let i = 0; i < 80; i++) {
+        setTimeout(() => {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti';
+            confetti.style.left = Math.random() * 100 + '%';
+            confetti.style.width = (Math.random() * 10 + 5) + 'px';
+            confetti.style.height = (Math.random() * 10 + 5) + 'px';
+            confetti.style.background = colores[Math.floor(Math.random() * colores.length)];
+            confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
+            confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+            document.body.appendChild(confetti);
+            setTimeout(() => confetti.remove(), 3000);
+        }, i * 30);
+    }
 }
 
 // ============ CALIFICACIÓN ============
@@ -575,16 +571,13 @@ function renderizarCalificacion(juezId) {
     const c = document.getElementById('platos-a-calificar');
     if (!c) return;
     
-    // Si el concurso está finalizado, bloquear
     if (concursoFinalizado) {
-        c.innerHTML = '<div class="votacion-bloqueada" style="padding:3rem;text-align:center;">' +
-            '<p class="empty-message">🔒 El concurso ha finalizado. Las votaciones están cerradas.</p>' +
-            '</div>';
+        c.innerHTML = '<div style="padding:3rem;text-align:center;"><p class="empty-message">🔒 El concurso ha finalizado. Las votaciones están cerradas.</p></div>';
         return;
     }
     
     if (appData.categorias.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay categorías configuradas. Contacte al administrador.</p>';
+        c.innerHTML = '<p class="empty-message">No hay categorías configuradas para evaluar.</p>';
         return;
     }
     
@@ -593,11 +586,10 @@ function renderizarCalificacion(juezId) {
         return;
     }
     
-    // Filtrar platos: no se puede calificar el propio
     const platos = appData.platos.filter(p => p.cocinero_id !== juezId);
     
     if (platos.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay platos disponibles para evaluar. Espere a que otros cocineros registren sus platos.</p>';
+        c.innerHTML = '<p class="empty-message">No hay platos disponibles para evaluar.</p>';
         return;
     }
     
@@ -613,7 +605,6 @@ function renderizarCalificacion(juezId) {
             (p.descripcion ? '<p style="font-size:0.9rem;color:var(--text-light);margin-bottom:1rem;">' + p.descripcion + '</p>' : '');
         
         if (calExistente) {
-            // Mostrar calificación existente
             html += '<div style="background:var(--card);padding:1rem;border-radius:8px;margin-bottom:0.5rem;">' +
                 '<strong>✅ Ya calificado</strong>';
             
@@ -632,10 +623,8 @@ function renderizarCalificacion(juezId) {
             html += '<button class="btn-delete btn-small" style="margin-top:0.5rem;" onclick="window.cambiarCalificacion(\'' + calExistente.id + '\',\'' + juezId + '\')">✏️ Modificar Calificación</button>' +
                 '</div>';
         } else {
-            // Formulario para calificar
             html += '<div style="background:var(--card);padding:1rem;border-radius:8px;">';
             
-            // Categorías con estrellas
             appData.categorias.forEach(cat => {
                 html += '<div class="categoria-voto">' +
                     '<label>' + cat + ' (1-5):</label>' +
@@ -648,14 +637,11 @@ function renderizarCalificacion(juezId) {
                 '</div>';
             });
             
-            // Comentario general
             html += '<div class="form-group" style="margin-top:0.8rem;">' +
                 '<label>Comentario general (opcional):</label>' +
                 '<textarea class="comentario-general" placeholder="Un comentario sobre el plato..." rows="2" style="width:100%;"></textarea>' +
-                '</div>';
-            
-            // Botón de enviar
-            html += '<button class="btn-primary btn-small" onclick="window.enviarCalificacion(\'' + p.id + '\',\'' + juezId + '\')">✅ Enviar Calificación</button>' +
+                '</div>' +
+                '<button class="btn-primary btn-small" onclick="window.enviarCalificacion(\'' + p.id + '\',\'' + juezId + '\')">✅ Enviar Calificación</button>' +
                 '</div>';
         }
         
@@ -664,7 +650,6 @@ function renderizarCalificacion(juezId) {
     }).join('');
 }
 
-// Seleccionar estrella individual
 function seleccionarEstrella(elemento, valor) {
     const starsDiv = elemento.parentElement;
     const todasLasEstrellas = starsDiv.querySelectorAll('span');
@@ -680,14 +665,10 @@ function seleccionarEstrella(elemento, valor) {
         }
     });
     
-    if (hiddenInput) {
-        hiddenInput.value = valor;
-    }
+    if (hiddenInput) hiddenInput.value = valor;
 }
 
-// Enviar calificación completa
-function enviarCalificacion(platoId, juezId) {
-    // Verificar si el concurso está finalizado
+async function enviarCalificacion(platoId, juezId) {
     if (concursoFinalizado) {
         alert('🔒 El concurso ha finalizado. No se aceptan más calificaciones.');
         return;
@@ -699,7 +680,6 @@ function enviarCalificacion(platoId, juezId) {
         return;
     }
     
-    // Recolectar puntuaciones por categoría
     const puntuaciones = {};
     const hiddenInputs = votoCard.querySelectorAll('.puntuacion-hidden');
     
@@ -709,43 +689,36 @@ function enviarCalificacion(platoId, juezId) {
         puntuaciones[categoria] = valor || 0;
     });
     
-    // Verificar que todas las categorías tengan puntuación
     const sinCalificar = appData.categorias.filter(cat => !puntuaciones[cat] || puntuaciones[cat] === 0);
     if (sinCalificar.length > 0) {
-        alert('⚠️ Por favor califique todas las categorías:\n' + sinCalificar.join(', ') + 
-              '\n\nDebe seleccionar al menos 1 estrella en cada una.');
+        alert('⚠️ Por favor califique todas las categorías:\n' + sinCalificar.join(', '));
         return;
     }
     
-    // Validar que todas las puntuaciones estén entre 1 y 5
-    for (const [cat, punt] of Object.entries(puntuaciones)) {
-        if (punt < 1 || punt > 5) {
-            alert('⚠️ Error en la categoría "' + cat + '": la puntuación debe ser entre 1 y 5.');
-            return;
-        }
-    }
-    
-    // Obtener comentario
     const comentarioInput = votoCard.querySelector('.comentario-general');
     const comentario = comentarioInput ? comentarioInput.value.trim() : '';
     
-    // Guardar calificación
-    appData.calificaciones.push({
-        id: generarId(),
-        plato_id: platoId,
-        juez_id: juezId,
-        puntuaciones,
-        comentario
-    });
-    
-    guardarDatos();
+    const id = generarId();
+    await apiCall('addCalificacion', { id, plato_id: platoId, juez_id: juezId, puntuaciones, comentario });
+    await refrescarDatos();
     renderizarCalificacion(juezId);
     
-    // Mostrar confirmación
-    const plato = obtenerPlato(platoId);
+    const plato = appData.platos.find(p => p.id === platoId);
     alert('✅ ¡Calificación enviada correctamente!\n\nPlato: ' + (plato ? plato.nombre : 'Desconocido'));
 }
 
+async function cambiarCalificacion(calId, juezId) {
+    if (concursoFinalizado) {
+        alert('🔒 El concurso ha finalizado. No se pueden modificar calificaciones.');
+        return;
+    }
+    
+    if (!confirm('¿Desea modificar su calificación?\nSe eliminará la actual para que pueda volver a calificar.')) return;
+    
+    await apiCall('deleteCalificacion', { id: calId });
+    await refrescarDatos();
+    renderizarCalificacion(juezId);
+}
 
 // ============ RESULTADOS ============
 function renderizarResultados() {
@@ -754,7 +727,7 @@ function renderizarResultados() {
     if (!c) return;
     
     if (appData.platos.length === 0) {
-        c.innerHTML = '<p class="empty-message">No hay platos.</p>';
+        c.innerHTML = '<p class="empty-message">No hay platos para mostrar resultados.</p>';
         if (podioDiv) podioDiv.style.display = 'none';
         return;
     }
@@ -784,9 +757,9 @@ function renderizarResultados() {
         }
         
         const cals = appData.calificaciones.filter(cal => cal.plato_id === p.id);
-        let detalleCategorias = {};
         let sumaTotalCategorias = 0;
         let cantidadCategorias = 0;
+        let detalleCategorias = {};
         
         appData.categorias.forEach(cat => {
             const puntuacionesCat = cals
@@ -813,13 +786,12 @@ function renderizarResultados() {
         };
     }).sort((a, b) => b.promedio - a.promedio);
     
-    // Renderizar podio si está finalizado
+    // Podio
     if (concursoFinalizado && podioDiv && ranking.length >= 3) {
         podioDiv.style.display = 'block';
         podioDiv.innerHTML = `
             <h3 style="text-align:center;margin-bottom:1rem;">🥇 PODIO OFICIAL 🥇</h3>
             <div class="podio-container">
-                <!-- 2do puesto -->
                 <div class="podio-puesto podio-2">
                     <div class="podio-bar">
                         <div class="podio-medalla">🥈</div>
@@ -830,7 +802,6 @@ function renderizarResultados() {
                     <div class="podio-label">2° Puesto</div>
                 </div>
                 
-                <!-- 1er puesto -->
                 <div class="podio-puesto podio-1">
                     <div class="podio-bar">
                         <div class="podio-medalla">👑</div>
@@ -841,7 +812,6 @@ function renderizarResultados() {
                     <div class="podio-label">🏆 CAMPEÓN</div>
                 </div>
                 
-                <!-- 3er puesto -->
                 <div class="podio-puesto podio-3">
                     <div class="podio-bar">
                         <div class="podio-medalla">🥉</div>
@@ -857,7 +827,7 @@ function renderizarResultados() {
         podioDiv.style.display = 'none';
     }
     
-    // Renderizar tabla de ranking
+    // Tabla de ranking
     c.innerHTML = '<h3 style="margin-top:1rem;">📊 Clasificación General</h3>' + ranking.map((item, i) => {
         const clase = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
         const medalla = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
@@ -873,7 +843,7 @@ function renderizarResultados() {
             '<div class="rank-pos">' + (medalla || '#' + (i+1)) + '</div>' +
             '<div class="rank-info">' +
                 '<strong>' + item.nombre + '</strong>' +
-                '<div>por ' + (item.cocinero ? item.cocinero.nombre : '?') + '</div>' +
+                '<div style="font-size:0.85rem;color:var(--text-light);">por ' + (item.cocinero ? item.cocinero.nombre : '?') + '</div>' +
                 '<div style="font-size:0.8rem;">' + infoVotos + '</div>' +
                 '<div class="rank-detalle">' + detalleHTML + '</div>' +
             '</div>' +
@@ -881,9 +851,11 @@ function renderizarResultados() {
         '</div>';
     }).join('');
 }
-// ============ GLOBALES ============
+
+// ============ EXPORTAR FUNCIONES GLOBALES ============
 window.eliminarParticipante = eliminarParticipante;
 window.eliminarPlato = eliminarPlato;
 window.eliminarCategoria = eliminarCategoria;
 window.seleccionarEstrella = seleccionarEstrella;
 window.enviarCalificacion = enviarCalificacion;
+window.cambiarCalificacion = cambiarCalificacion;
